@@ -48,15 +48,15 @@ class ReconciliationRuleCrudController extends AbstractCrudController
         yield TextField::new('name', 'Nom')->setColumns(4);
         yield IntegerField::new('priority', 'Priorité')->setColumns(2);
         yield BooleanField::new('enabled', 'Active')->setColumns(2);
-        yield TextField::new('pattern', 'Libellé contient')->setColumns(6)
+        yield TextField::new('pattern', 'Libellé contient')->setRequired(false)->setColumns(6)
             ->setHelp('Des mots qui doivent tous figurer dans le libellé (FRAIS TENUE COMPTE), ou une /expression régulière/.');
-        yield TextField::new('iban', 'IBAN de la contrepartie')->setColumns(3);
+        yield TextField::new('iban', 'IBAN de la contrepartie')->setRequired(false)->setColumns(3);
         yield TextField::new('sign', 'Sens')->setColumns(3)
             ->setFormType(EnumType::class)->setFormTypeOptions(['class' => RuleSign::class])
             ->formatValue(fn ($value) => match ($value) { RuleSign::IN => 'entrées', RuleSign::OUT => 'sorties', default => 'tous' });
         yield $this->pick('account', 'Compte', Account::class, 'number')->setColumns(4);
         yield $this->pick('party', 'Tiers', Party::class, 'name', false)->setColumns(4);
-        yield TextareaField::new('split', 'Ventilation (JSON)')->hideOnIndex()->setColumns(12)
+        yield TextareaField::new('split', 'Ventilation (JSON)')->setRequired(false)->hideOnIndex()->setColumns(12)
             ->setHelp('Facultatif : [{"account": "164", "amount": 85000}, {"account": "6611", "rest": true}] - "amount" en centimes, "percent", ou "rest" pour le reste.')
             ->setFormTypeOption('getter', fn (ReconciliationRule $rule) => null === $rule->getSplit() ? '' : json_encode($rule->getSplit(), \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT))
             ->setFormTypeOption('setter', function (ReconciliationRule $rule, ?string $json) {

@@ -58,7 +58,7 @@ class BankAccountCrudController extends AbstractCrudController
     {
         yield IdField::new('id')->onlyOnIndex();
         yield TextField::new('name', 'Nom')->setColumns(6);
-        yield TextField::new('iban', 'IBAN')->setColumns(6)->formatValue(fn ($value) => BankAccount::mask($value));
+        yield TextField::new('iban', 'IBAN')->setRequired(false)->setColumns(6)->formatValue(fn ($value) => BankAccount::mask($value));
         yield AssociationField::new('connection', 'Connexion')->hideOnForm();
         yield $this->pick('account', 'Compte (512)', Account::class, 'number')->setColumns(6);
         yield $this->pick('journal', 'Journal', Journal::class, 'code')->setColumns(6);

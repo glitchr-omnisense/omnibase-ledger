@@ -54,9 +54,9 @@ class BookCrudController extends AbstractCrudController
     {
         yield IdField::new('id')->onlyOnIndex();
         yield TextField::new('name', 'Nom')->setColumns(6);
-        yield TextField::new('siren', 'SIREN')->setColumns(3);
+        yield TextField::new('siren', 'SIREN')->setRequired(false)->setColumns(3);
         yield TextField::new('currency', 'Devise')->setColumns(3);
-        yield DateField::new('lockedUntil', 'Verrouillé jusqu\'au')->setColumns(4)
+        yield DateField::new('lockedUntil', 'Verrouillé jusqu\'au')->setRequired(false)->setColumns(4)
             ->setHelp('Rien ne peut plus être passé, modifié ni extourné à cette date ou avant.');
         yield DateTimeField::new('createdAt', 'Créé le')->hideOnForm();
     }

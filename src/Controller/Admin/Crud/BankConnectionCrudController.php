@@ -66,7 +66,7 @@ class BankConnectionCrudController extends AbstractCrudController
         yield IdField::new('id')->onlyOnIndex();
         yield AssociationField::new('book', 'Livre')->hideOnForm();
         yield TextField::new('gateway', 'Passerelle')->hideOnForm();
-        yield TextField::new('name', 'Nom')->setColumns(6);
+        yield TextField::new('name', 'Nom')->setRequired(false)->setColumns(6);
         yield TextField::new('consentStatus', 'Consentement')->hideOnForm()
             ->formatValue(fn ($value) => match ($value) {
                 ConsentState::ACTIVE => 'actif',

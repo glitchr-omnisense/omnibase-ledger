@@ -37,7 +37,7 @@ class FiscalYearCrudController extends AbstractCrudController
         yield AssociationField::new('book', 'Livre')->setColumns(4)->setDisabled(Crud::PAGE_EDIT === $pageName);
         yield DateField::new('start', 'Début')->setColumns(4);
         yield DateField::new('end', 'Fin')->setColumns(4);
-        yield DateTimeField::new('closedAt', 'Clôturé le')->setColumns(4);
+        yield DateTimeField::new('closedAt', 'Clôturé le')->setRequired(false)->setColumns(4);
     }
 
     public function createEntity(string $entityFqcn): object

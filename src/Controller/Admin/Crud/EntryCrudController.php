@@ -84,7 +84,7 @@ class EntryCrudController extends AbstractCrudController
         yield TextField::new('number', 'N°')->hideOnForm();
         yield DateField::new('date', 'Date')->setColumns(3);
         yield AssociationField::new('journal', 'Journal')->hideOnForm();
-        yield TextField::new('piece', 'Pièce')->setColumns(3);
+        yield TextField::new('piece', 'Pièce')->setRequired(false)->setColumns(3);
         yield TextField::new('label', 'Libellé')->setColumns(6);
         yield TextField::new('totalDebit', 'Montant')->hideOnForm()
             ->formatValue(fn ($value, Entry $entry) => number_format($entry->getTotalDebit() / 100, 2, ',', ' ').' '.$entry->getBook()->getCurrency());

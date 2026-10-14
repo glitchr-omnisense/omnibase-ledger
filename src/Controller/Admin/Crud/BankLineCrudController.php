@@ -64,7 +64,7 @@ class BankLineCrudController extends AbstractCrudController
         yield DateField::new('bookedOn', 'Date');
         yield AssociationField::new('bankAccount', 'Compte');
         yield TextField::new('label', 'Libellé');
-        yield TextField::new('counterpartyName', 'Contrepartie');
+        yield TextField::new('counterpartyName', 'Contrepartie')->setRequired(false);
         yield TextField::new('amount', 'Montant')
             ->formatValue(fn ($value, BankLine $line) => number_format($line->getAmount() / 100, 2, ',', ' ').' '.$line->getCurrency());
         yield TextField::new('status', 'Statut')

@@ -48,8 +48,8 @@ class PartyCrudController extends AbstractCrudController
             ->setFormType(EnumType::class)->setFormTypeOptions(['class' => PartyKind::class])
             ->formatValue(fn ($value) => self::enumValue($value));
         yield TextField::new('name', 'Nom')->setColumns(4);
-        yield TextField::new('reference', 'Référence')->setColumns(4)->setHelp('L\'identifiant de l\'application (un bail, un code fournisseur) : unique dans le livre.');
-        yield TextField::new('iban', 'IBAN')->setColumns(4)->setHelp('Ses virements sont reconnus à cet IBAN.');
+        yield TextField::new('reference', 'Référence')->setRequired(false)->setColumns(4)->setHelp('L\'identifiant de l\'application (un bail, un code fournisseur) : unique dans le livre.');
+        yield TextField::new('iban', 'IBAN')->setRequired(false)->setColumns(4)->setHelp('Ses virements sont reconnus à cet IBAN.');
         yield TextField::new('accountNumber', 'Compte auxiliaire')->setColumns(4)->setRequired(false)
             ->setHelp('Laissé vide : 411, 401, 455 ou 467 suivi de la référence.');
     }
