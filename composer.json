@@ -34,7 +34,7 @@
         "php": ">=8.2",
         "ext-sodium": "*",
         "doctrine/orm": "^2.15|^3.0",
-        "glitchr/omnibank": "1.x-dev",
+        "omniscient/omnibank": "1.x-dev",
         "glitchr/omnibase": "3.0.*-dev",
         "omnibase/admin": "dev-main",
         "symfony/config": "^6.0|^7.0|^8.0",
