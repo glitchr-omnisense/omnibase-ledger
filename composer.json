@@ -35,7 +35,7 @@
         "ext-sodium": "*",
         "doctrine/orm": "^2.15|^3.0",
         "omniscient/omnibank": "1.x-dev",
-        "glitchr/omnibase": "3.0.*-dev",
+        "omniscient/omnibase": "3.0.*-dev",
         "omnibase/admin": "dev-main",
         "symfony/config": "^6.0|^7.0|^8.0",
         "symfony/console": "^6.0|^7.0|^8.0",
