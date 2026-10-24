@@ -99,6 +99,7 @@ class NewFormsSubmitTest extends TestCase
         ];
     }
 
+    /** @dataProvider screens */
     #[DataProvider('screens')]
     public function testTheNewFormWritesEveryFieldItShows(string $controller, \Closure $new, array $submitted, \Closure $read, array $expected): void
     {

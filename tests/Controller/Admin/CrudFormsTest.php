@@ -61,6 +61,7 @@ class CrudFormsTest extends TestCase
         }
     }
 
+    /** @dataProvider controllers */
     #[DataProvider('controllers')]
     public function testAnEnumIsChosenThroughEnumTypeAndARelatedRecordIsNotEmbeddedWithOne(string $controller): void
     {

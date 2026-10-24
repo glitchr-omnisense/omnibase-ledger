@@ -73,6 +73,7 @@ class PostingTest extends InMemoryLedger
         yield 'unknown account' => [fn (EntryDraft $d) => $d->line('512', 100, 0)->line('7061', 0, 100), 'no account 7061'];
     }
 
+    /** @dataProvider refusals */
     #[\PHPUnit\Framework\Attributes\DataProvider('refusals')]
     public function testInvalidDraftsAreRefusedBeforeAnythingIsWritten(callable $build, string $message): void
     {

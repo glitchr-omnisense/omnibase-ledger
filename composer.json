@@ -67,8 +67,7 @@
         },
         "sort-packages": true,
         "allow-plugins": {
-            "glitchr/base-plugin": true,
-            "glitchr/doctrine-dc2type": true,
+            "omnibridge/composer": true,
             "php-http/discovery": true
         }
     },
