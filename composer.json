@@ -1,7 +1,7 @@
 {
     "name": "omnibase/ledger",
     "type": "symfony-bundle",
-    "description": "Double-entry accounting for omnibase: books, a French chart of accounts, journals, parties and lettering, bank feeds through glitchr/omnibank, reconciliation with ranked suggestions, trial balance, general ledger, income statement, balance sheet and the FEC export",
+    "description": "Double-entry accounting for omnibase: books, a French chart of accounts, journals, parties and lettering, bank feeds through omnisense/omnibank, reconciliation with ranked suggestions, trial balance, general ledger, income statement, balance sheet and the FEC export",
     "keywords": [
         "symfony",
         "accounting",

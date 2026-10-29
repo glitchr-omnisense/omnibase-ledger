@@ -1,6 +1,6 @@
 # omnibase/ledger
 
-Double-entry accounting for [omnibase](https://github.com/glitchr-omnisense/omnibase) applications, with bank feeds through [glitchr/omnibank](https://github.com/glitchr-omnisense/omnibank) and bank **reconciliation**. It was written for French real-estate companies (SCI): rent notices, tenants' payments, supplier invoices, a loan, card payments through Stripe.
+Double-entry accounting for [omnibase](https://github.com/glitchr-omnisense/omnibase) applications, with bank feeds through [omnisense/omnibank](https://github.com/glitchr-omnisense/omnibank) and bank **reconciliation**. It was written for French real-estate companies (SCI): rent notices, tenants' payments, supplier invoices, a loan, card payments through Stripe.
 
 - **Books.** One per legal entity. Each has its chart of accounts (PCG), its journals (BQ, VT, AC, OD, AN), its fiscal years, and a lock date after which nothing changes.
 - **Posting.**
@@ -36,13 +36,13 @@ Double-entry accounting for [omnibase](https://github.com/glitchr-omnisense/omni
 ## Requirements
 
 - PHP 8.2+, `ext-sodium`
-- `omnisense/omnibase` 3.x, `omnibase/admin`
-- `glitchr/omnibank` 1.x with the gateways you use (`omnibank/files`, `omnibank/qonto`, `omnibank/powens`, `omnibank/bridge`). Without it, the ledger, lettering and reports still work, and the bank screens say Omnibank is missing.
+- `omnisense/omnibase` 3.0 or 4.0, `omnibase/admin`
+- `omnisense/omnibank` 1.x with the gateways you use (`omnibank/files`, `omnibank/qonto`, `omnibank/powens`, `omnibank/bridge`). Without it, the ledger, lettering and reports still work, and the bank screens say Omnibank is missing.
 
 ## Installation
 
 ```bash
-composer require omnibase/ledger:dev-main glitchr/omnibank:1.x-dev omnibank/files:1.x-dev
+composer require omnibase/ledger:dev-main omnisense/omnibank:1.x-dev omnibank/files:1.x-dev
 ```
 
 ```php

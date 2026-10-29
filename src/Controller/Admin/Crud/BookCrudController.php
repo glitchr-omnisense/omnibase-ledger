@@ -42,7 +42,7 @@ class BookCrudController extends AbstractCrudController
             ->linkToRoute('ledger_admin_open_items', fn (Book $book) => ['book' => $book->getId()]);
         $seed = Action::new('ledgerSeed', 'Plan comptable', 'fa-solid fa-list-ol')
             ->linkToRoute('ledger_admin_book_seed', fn (Book $book) => ['book' => $book->getId(), '_token' => $this->actionToken('ledger_book_seed', $book->getId())])
-            ->askConfirmation('Ajouter au livre les comptes et journaux du plan SCI qui lui manquent ?');
+            ->askConfirmation('Ajouter au livre les comptes et journaux du plan comptable configuré (ledger.chart) qui lui manquent ?');
 
         return $this->ledgerActions($actions)
             ->add(Action::INDEX, $balance)->add(Action::DETAIL, $balance)
