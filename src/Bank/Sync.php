@@ -9,6 +9,7 @@ use Base\Ledger\Exception\BankException;
 use Doctrine\ORM\EntityManagerInterface;
 use Omnibank\Model\Account as BankAccountModel;
 use Omnibank\Model\Connection;
+use Omnibank\Model\ConnectionState;
 use Omnibank\Request\FetchBalances;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
@@ -26,6 +27,7 @@ class Sync
         private readonly Connections $connections,
         private readonly Importer $importer,
         #[Autowire('%ledger.bank.sync_overlap_days%')] private readonly int $overlapDays = 5,
+        private readonly ?Aggregates $aggregates = null,
     ) {
     }
 
@@ -38,6 +40,7 @@ class Sync
         $now = new \DateTimeImmutable();
 
         if ($connection->needsRenewal($now) || !$omnibank->consent->isActive($now)) {
+            $connection->setConnectionState(ConnectionState::ACTION_NEEDED, $now);
             $this->markRenewal($connection, $omnibank, 'The bank wants its consent given again.');
 
             throw new BankException(sprintf('%s: the bank\'s consent needs renewing.', $connection));
@@ -57,12 +60,18 @@ class Sync
             }
         } catch (BankException $e) {
             $connection->setLastError($e->getMessage());
+            $connection->setConnectionState(ConnectionState::ofFailure($e), $now);
             $this->entityManager->flush();
 
             throw $e;
         } catch (\Throwable $e) {
             $connection->setLastError($e->getMessage());
-            if (self::isConsentError($e)) {
+            $state = ConnectionState::ofFailure($e);
+            if (self::isConsentError($e) && ConnectionState::BUG === $state) {
+                $state = ConnectionState::ACTION_NEEDED;
+            }
+            $connection->setConnectionState($state, $now);
+            if (self::isConsentError($e) || $state->needsUser()) {
                 $connection->setConsentStatus(ConsentState::NEEDS_RENEWAL);
             }
             $this->entityManager->flush();
@@ -72,7 +81,10 @@ class Sync
 
         $account->setLastSyncedAt($now);
         $connection->setLastError(null);
+        // The gateway's own word for the access when it gives one with the account (Powens' error), else it went through.
+        $connection->setConnectionState($model->state ?? ConnectionState::OK, $now);
         $this->entityManager->flush();
+        $this->aggregates?->rebuild($account);
 
         return $created;
     }
@@ -97,6 +109,8 @@ class Sync
         $gateway = $this->connections->gateway($account->getConnection()->getGateway());
         foreach ($gateway->accounts($omnibank) as $candidate) {
             if ($candidate->id === $account->getExternalId()) {
+                $account->setKind($candidate->kind)->setProviderType($candidate->type);
+
                 return $candidate;
             }
         }

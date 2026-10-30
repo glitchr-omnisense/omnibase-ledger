@@ -1,0 +1,19 @@
+{# Base\Ledger\Admin\Widget\Bank\RecurringWidgetType: the flows that come back - rents, instalments, subscriptions. #}
+{% extends '@Ledger/admin/widget/bank/_layout.html.twig' %}
+{% block subtitle %}{{ 'dashboard.recurring.count'|trans({count: count}, 'ledger') }}{% endblock %}
+{% block body %}
+{% if flows is empty %}
+    <p class="ld-empty">{{ 'dashboard.recurring.nothing'|trans({}, 'ledger') }}</p>
+{% else %}
+<div class="ld-hero"><span class="ld-hero-value">{{ monthly > 0 ? '+' }}{{ monthly|ledger_money(currency) }}</span><span class="ld-hero-unit">{{ 'dashboard.recurring.monthly'|trans({}, 'ledger') }}</span></div>
+<table class="ld-table" style="margin-top: .5rem">
+    {% for flow in flows %}
+    <tr>
+        <td class="ld-ellipsis"><strong>{{ flow.label }}</strong><br><span class="ld-muted">{{ ('dashboard.rhythm.' ~ flow.rhythm)|trans({}, 'ledger') }} · {{ 'dashboard.recurring.times'|trans({count: flow.occurrences}, 'ledger') }}{% if flow.category %} · {{ ('dashboard.category.' ~ flow.category.value)|trans({}, 'ledger') }}{% endif %}</span></td>
+        <td class="ld-date ld-hide-narrow" title="{{ 'dashboard.recurring.next'|trans({}, 'ledger') }}"><i class="fa-regular fa-calendar"></i> {{ flow.nextOn|date('d/m') }}</td>
+        <td class="ld-amount {{ flow.incoming ? 'ld-in' : 'ld-out' }}">{{ flow.incoming ? '+' }}{{ flow.amount|ledger_money(flow.bankAccount.currency) }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% endif %}
+{% endblock %}

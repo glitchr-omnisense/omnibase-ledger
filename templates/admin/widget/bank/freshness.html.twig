@@ -1,0 +1,21 @@
+{# Base\Ledger\Admin\Widget\Bank\FreshnessWidgetType: each account's last sync, the stale first. #}
+{% extends '@Ledger/admin/widget/bank/_layout.html.twig' %}
+{% block subtitle %}{{ 'dashboard.freshness.stale'|trans({count: stale}, 'ledger') }}{% endblock %}
+{% block body %}
+<ul class="ld-rows">
+    {% for row in rows %}
+    <li>
+        <span class="ld-main"><strong>{{ row.account.name }}</strong><span class="ld-muted">{{ row.account.connection }}{% if row.account.iban %} · {{ row.account.iban|ledger_iban }}{% endif %}</span></span>
+        <span class="ld-amount">
+            {% if row.at is null %}<span class="ld-pill is-alert">{{ 'dashboard.freshness.never'|trans({}, 'ledger') }}</span>
+            {% else %}<span class="ld-pill {{ row.stale ? 'is-alert' : 'is-ok' }}" title="{{ row.at|date('d/m/Y H:i') }}">{{ 'dashboard.freshness.age'|trans({days: row.age}, 'ledger') }}</span>{% endif %}
+            {% if row.stale and can_manage %}
+                {% if row.files %}<a class="ld-link" href="{{ path('ledger_admin_bank_upload', {bankAccount: row.account.id}) }}" title="{{ 'bank.upload'|trans({}, 'ledger') }}"><i class="fa-solid fa-file-arrow-up"></i></a>
+                {% else %}<a class="ld-link" href="{{ path('ledger_admin_bank_sync', {bankAccount: row.account.id, _token: csrf_token('ledger_bank_sync_' ~ row.account.id)}) }}" title="{{ 'dashboard.freshness.sync'|trans({}, 'ledger') }}"><i class="fa-solid fa-rotate"></i></a>{% endif %}
+            {% endif %}
+        </span>
+    </li>
+    {% endfor %}
+</ul>
+<p class="ld-muted" style="margin: .5rem 0 0">{{ 'dashboard.freshness.rule'|trans({api: staleDays, files: staleFilesDays}, 'ledger') }}</p>
+{% endblock %}

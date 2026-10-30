@@ -63,7 +63,8 @@ Omnibank `BankTransaction`s into `BankLine`s and returns how many are new. A tra
 imported once (its id is unique per bank account; duplicates in one batch are skipped). A line
 already there is updated while it is pending (unmatched or suggested) - banks correct pending
 lines: date, amount, label, value date, counterparty, reference, raw data - and left alone once
-reconciled or ignored.
+reconciled or ignored. Each line keeps the transaction's category (`BankLine::getCategory()`, an
+Omnibank `TransactionCategory`, stored by its value), when the gateway gives one.
 
 ## Syncing an account
 
@@ -78,11 +79,20 @@ reconciled or ignored.
    on their id.
 3. When the gateway supports `FetchBalances`, the last booked balance (any balance when none
    is booked) becomes the account's `bankBalance`.
-4. `lastSyncedAt` is set and `lastError` cleared.
+4. `lastSyncedAt` is set and `lastError` cleared; the account's kind and the gateway's word
+   for it (`BankAccount::getKind()`, an Omnibank `AccountKind`, and `getProviderType()`) are
+   taken from the gateway's account, and the connection's state
+   (`BankConnection::getConnectionState()`, an Omnibank `ConnectionState`) becomes the one the
+   gateway gives with the account (Powens' `error`: data read, but the user must act), else OK.
+5. The account's precomputed rows are written again (Aggregates, below).
 
-A failure is recorded in `lastError`; one whose message speaks of consent, expiry,
-re-authentication, SCA, 401 or 403 marks the connection `NEEDS_RENEWAL`. The bank no longer
-listing the account is a `BankException`.
+A failure is recorded in `lastError` and as the connection's state
+(`ConnectionState::ofFailure()`: the state a provider's refusal carries, BANK_UNAVAILABLE for
+an outage, else BUG); one whose message speaks of consent, expiry, re-authentication, SCA, 401
+or 403, or whose state wants the user, marks the connection `NEEDS_RENEWAL`. The bank no longer
+listing the account is a `BankException`. A webhook's state (`Notification::$state`) is
+recorded on its connection before the sync it starts; a connection opened through a provider's
+page is PENDING until its accounts are found.
 
 `syncConnection(BankConnection $connection): int` syncs every account of a connection.
 
@@ -99,6 +109,38 @@ reads a CAMT.053, OFX or CSV file through the `files` gateway and imports its li
 - The closing balance, when the statement has one, becomes the account's bank balance unless
   a later one is already kept.
 - Overlapping statements import each line once. The file itself is not stored.
+- A statement that says what the account is (CAMT.053's `Acct/Tp`, OFX's `ACCTTYPE`) sets its
+  kind; the connection's state becomes OK and the precomputed rows are written again.
+
+## What the dashboard reads
+
+The bank cards never read every line on a page load. `Base\Ledger\Bank\Aggregates::rebuild(BankAccount)`
+folds an account's lines (one query, plain values, no entity) through the pure
+`Bank\Aggregator` into four tables, deleted and written again:
+
+| Entity (table) | One row per | Holds |
+|---|---|---|
+| `BankDay` (`ledger_bank_day`) | account and day with a movement | in, out, how many each way, the transfers among them (lines categorised `transfer` or carrying the counterparty's IBAN), the closing balance |
+| `BankDayCategory` (`ledger_bank_day_category`) | account, day and category (`none` when uncategorised) | in, out, how many each way |
+| `BankCounterpartyMonth` (`ledger_bank_counterparty_month`) | account, month and counterparty | in, out, how many each way, the name to show |
+| `BankRecurring` (`ledger_bank_recurring`) | recurring flow found | the usual amount, the rhythm, occurrences, the last and next date, the category |
+
+The closing balances are anchored on the bank's last balance (the lines booked after its date
+added), else on the lines alone from zero. A counterparty is the bank's name for it, else the
+IBAN, else the label stripped of the bank's words (`Bank\Counterparty`). A recurring flow
+(`Bank\Recurrences`) is one counterparty's lines in one direction, split by amount (a bank's
+instalment and its fees are two flows), at least three, whose median interval is a week, a
+month, a quarter or a year with three quarters of the intervals near it, whose amounts stay
+within a quarter of their median, and whose next date is not past by more than the rhythm's
+tolerance (2, 6, 12, 20 days).
+
+When: after each sync (`Sync`) and statement upload (`StatementUpload`), and for every account
+with `bin/console ledger:bank:aggregate [book]` - once a day, to move the recurring flows' next
+dates on and to catch up after lines changed by other means:
+
+```cron
+30 4 * * *  bin/console ledger:bank:aggregate
+```
 
 ## The webhook
 

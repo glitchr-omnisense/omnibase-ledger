@@ -1,0 +1,70 @@
+{# Base\Ledger\Admin\Widget\Bank\StatisticsWidgetType: in and out per bucket as bars, the
+   balance above them on its own scale (never a second axis on the bars), every period
+   drawn and switched in the card without a script (:has() on radios), series toggles,
+   a tooltip per bucket, a table for screen readers. #}
+{% extends '@Ledger/admin/widget/bank/_layout.html.twig' %}
+{% block subtitle %}{{ currency }}{% endblock %}
+{% block body %}
+{% set uid = 'ld' ~ random() %}
+<div class="ld-stats">
+    <div class="ld-toolbar">
+        <div class="ld-pills" role="radiogroup" aria-label="{{ 'dashboard.period_label'|trans({}, 'ledger') }}">
+            {% for key, chart in charts %}
+            <label data-key="{{ key }}"><input class="ld-choice" type="radio" name="{{ uid }}-period" value="{{ key }}"{{ key == period.key ? ' checked' }}>{{ ('dashboard.period_short.' ~ key)|trans({}, 'ledger') }}</label>
+            {% endfor %}
+        </div>
+        <div class="ld-toggles">
+            <label class="ld-s1"><input type="checkbox" data-series="in" checked><span class="ld-swatch"></span>{{ 'dashboard.series.in'|trans({}, 'ledger') }}</label>
+            <label class="ld-s2"><input type="checkbox" data-series="out" checked><span class="ld-swatch"></span>{{ 'dashboard.series.out'|trans({}, 'ledger') }}</label>
+            <label class="ld-s3"><input type="checkbox" data-series="balance" checked><span class="ld-swatch"></span>{{ 'dashboard.series.balance'|trans({}, 'ledger') }}</label>
+        </div>
+    </div>
+    {% for key, chart in charts %}
+    {% set n = chart.buckets|length %}
+    {% set every = n > 8 ? (n / 6)|round(0, 'ceil') : 1 %}
+    <div class="ld-chart" data-period="{{ key }}">
+        <div class="ld-totals">
+            <span>{{ 'dashboard.series.in'|trans({}, 'ledger') }} <strong>{{ chart.in|ledger_money(currency) }}</strong></span>
+            <span>{{ 'dashboard.series.out'|trans({}, 'ledger') }} <strong>{{ chart.out|ledger_money(currency) }}</strong></span>
+            <span>{{ 'dashboard.statistics.net'|trans({}, 'ledger') }} <strong>{{ chart.in - chart.out > 0 ? '+' }}{{ (chart.in - chart.out)|ledger_money(currency) }}</strong></span>
+            <span>{{ 'dashboard.transfers.lines'|trans({count: chart.count}, 'ledger') }}</span>
+        </div>
+        <div class="ld-plot" aria-hidden="true">
+            <div class="ld-cols" style="--n: {{ n }}">
+                <div class="ld-balance ld-s3">
+                    <svg viewBox="0 0 100 100" preserveAspectRatio="none"><path class="ld-area" d="{{ chart.line.area }}"></path><polyline class="ld-line" points="{{ chart.line.points }}" vector-effect="non-scaling-stroke"></polyline></svg>
+                    <span class="ld-balance-scale" style="top: -.5rem">{{ chart.line.max|ledger_compact(currency) }}</span>
+                    <span class="ld-balance-scale" style="bottom: .05rem">{{ chart.line.min|ledger_compact(currency) }}</span>
+                </div>
+                <div class="ld-bars">
+                    {% for tick in chart.scale.ticks %}<span class="ld-tick" style="bottom: {{ (tick / chart.scale.max * 100)|round(2) }}%"><em>{{ tick|ledger_compact(currency) }}</em></span>{% endfor %}
+                </div>
+                {% for bucket in chart.buckets %}
+                {% set label = chart.period.bucket == 'month' ? bucket.from|ledger_month ~ ' ' ~ bucket.from|date('Y') : (chart.period.bucket == 'week' ? 'dashboard.statistics.week'|trans({from: bucket.from|date('d/m'), to: bucket.to|date('d/m')}, 'ledger') : bucket.from|date('d/m/Y')) %}
+                <div class="ld-col" tabindex="0">
+                    <i class="ld-dot" style="top: {{ (chart.line.coords[loop.index0].y * 0.036)|round(3) }}rem"></i>
+                    <span class="ld-bar ld-bar-in" style="height: calc(8.6rem * {{ bucket.inHeight / 100 }})"></span>
+                    <span class="ld-bar ld-bar-out" style="height: calc(8.6rem * {{ bucket.outHeight / 100 }})"></span>
+                    <div class="ld-tip">
+                        <b>{{ label }}</b>
+                        <span class="ld-tip-in"><i><span class="ld-swatch ld-s1"></span>{{ 'dashboard.series.in'|trans({}, 'ledger') }}</i>{{ bucket.in|ledger_money(currency) }}</span>
+                        <span class="ld-tip-out"><i><span class="ld-swatch ld-s2"></span>{{ 'dashboard.series.out'|trans({}, 'ledger') }}</i>{{ bucket.out|ledger_money(currency) }}</span>
+                        <span class="ld-tip-balance"><i><span class="ld-swatch ld-s3"></span>{{ 'dashboard.series.balance'|trans({}, 'ledger') }}</i>{{ bucket.balance|ledger_money(currency) }}</span>
+                        <span><i>{{ 'dashboard.statistics.lines'|trans({}, 'ledger') }}</i>{{ bucket.inCount + bucket.outCount }}</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            <div class="ld-axis" style="--n: {{ n }}">
+                {% for bucket in chart.buckets %}<span>{% if loop.index0 % every == 0 %}{{ chart.period.bucket == 'month' ? bucket.from|ledger_month : bucket.from|date('d/m') }}{% endif %}</span>{% endfor %}
+            </div>
+        </div>
+        <table class="ld-sr">
+            <caption>{{ ('dashboard.period.' ~ key)|trans({}, 'ledger') }}</caption>
+            <tr><th>{{ 'dashboard.statistics.bucket'|trans({}, 'ledger') }}</th><th>{{ 'dashboard.series.in'|trans({}, 'ledger') }}</th><th>{{ 'dashboard.series.out'|trans({}, 'ledger') }}</th><th>{{ 'dashboard.series.balance'|trans({}, 'ledger') }}</th></tr>
+            {% for bucket in chart.buckets %}<tr><td>{{ bucket.from|date('d/m/Y') }}</td><td>{{ bucket.in|ledger_money(currency) }}</td><td>{{ bucket.out|ledger_money(currency) }}</td><td>{{ bucket.balance|ledger_money(currency) }}</td></tr>{% endfor %}
+        </table>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

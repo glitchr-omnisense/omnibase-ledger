@@ -1,0 +1,26 @@
+{# Base\Ledger\Admin\Widget\Bank\BalanceWidgetType: the accounts' balance together, per currency, and its change over the period. #}
+{% extends '@Ledger/admin/widget/bank/_layout.html.twig' %}
+{% block body %}
+{% for total in totals %}
+<div class="ld-balance-total{{ not loop.first ? ' ld-more' }}">
+    <div class="ld-hero">
+        <span class="ld-hero-value">{{ total.balance|ledger_money(total.currency) }}</span>
+        {% if total.change != 0 %}
+        <span class="ld-change {{ total.change > 0 ? 'is-up' : 'is-down' }}"><i class="fa-solid fa-arrow-{{ total.change > 0 ? 'up' : 'down' }}"></i> {{ total.change > 0 ? '+' }}{{ total.change|ledger_money(total.currency) }}{% if total.changePercent is not null %} ({{ total.changePercent > 0 ? '+' }}{{ total.changePercent }} %){% endif %}</span>
+        {% endif %}
+    </div>
+    <span class="ld-muted">{{ 'dashboard.balance.over'|trans({count: total.accounts, currency: total.currency}, 'ledger') }}</span>
+    {% if loop.first and total.line.points %}
+    <div class="ld-spark" role="img" aria-label="{{ 'dashboard.balance.line'|trans({from: total.line.min|ledger_money(total.currency), to: total.line.max|ledger_money(total.currency)}, 'ledger') }}">
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path class="ld-area" d="{{ total.line.area }}"></path><polyline class="ld-line" points="{{ total.line.points }}" vector-effect="non-scaling-stroke"></polyline></svg>
+    </div>
+    {% endif %}
+    {% if total.creditAccounts > 0 %}
+    <div class="ld-figures ld-balance-split">
+        <div class="ld-figure"><span class="ld-label">{{ 'dashboard.balance.credits'|trans({count: total.creditAccounts}, 'ledger') }}</span><span class="ld-value">{{ total.credits|ledger_compact(total.currency) }}</span></div>
+        <div class="ld-figure"><span class="ld-label">{{ 'dashboard.balance.net'|trans({}, 'ledger') }}</span><span class="ld-value">{{ total.net|ledger_compact(total.currency) }}</span></div>
+    </div>
+    {% endif %}
+</div>
+{% endfor %}
+{% endblock %}

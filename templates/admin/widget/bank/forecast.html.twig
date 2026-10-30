@@ -1,0 +1,25 @@
+{# Base\Ledger\Admin\Widget\Bank\ForecastWidgetType: the balance ahead, from today's and the recurring flows. #}
+{% extends '@Ledger/admin/widget/bank/_layout.html.twig' %}
+{% block subtitle %}{{ 'dashboard.forecast.sub'|trans({count: forecast.flows}, 'ledger') }}{% endblock %}
+{% block body %}
+<div class="ld-figures">
+    <div class="ld-figure"><span class="ld-label">{{ 'dashboard.forecast.today'|trans({}, 'ledger') }}</span><span class="ld-value">{{ forecast.start|ledger_compact(currency) }}</span></div>
+    {% for days, balance in forecast.horizons %}
+    <div class="ld-figure"><span class="ld-label">{{ 'dashboard.forecast.in_days'|trans({count: days}, 'ledger') }}</span><span class="ld-value">{{ balance|ledger_compact(currency) }}</span><span class="ld-note {{ balance >= forecast.start ? 'ld-in' }}">{{ balance - forecast.start > 0 ? '+' }}{{ (balance - forecast.start)|ledger_compact(currency) }}</span></div>
+    {% endfor %}
+</div>
+<div class="ld-forecast" role="img" aria-label="{{ 'dashboard.forecast.aria'|trans({low: forecast.low.balance|ledger_money(currency), date: forecast.low.day|date('d/m/Y')}, 'ledger') }}">
+    <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path class="ld-area" d="{{ line.area }}"></path><polyline class="ld-line" points="{{ line.points }}" vector-effect="non-scaling-stroke"></polyline></svg>
+    {% for days, mark in marks %}{% if mark %}<i class="ld-mark" style="left: {{ mark.x }}%; top: {{ mark.y }}%" title="{{ 'dashboard.forecast.in_days'|trans({count: days}, 'ledger') }} : {{ forecast.horizons[days]|ledger_money(currency) }}"></i>{% endif %}{% endfor %}
+</div>
+<div class="ld-forecast-axis"><span>{{ 'dashboard.forecast.today'|trans({}, 'ledger') }}</span><span>+30 j</span><span>+60 j</span><span>+90 j</span></div>
+<p class="ld-muted" style="margin: .5rem 0 .8rem">{{ 'dashboard.forecast.low'|trans({amount: forecast.low.balance|ledger_money(currency), date: forecast.low.day|date('d/m')}, 'ledger') }}</p>
+{% if forecast.upcoming is not empty %}
+<h3 class="ld-section">{{ 'dashboard.forecast.next'|trans({}, 'ledger') }}</h3>
+<table class="ld-table">
+    {% for item in forecast.upcoming %}
+    <tr><td class="ld-date">{{ item.day|date('d/m') }}</td><td class="ld-ellipsis">{{ item.label }}</td><td class="ld-amount {{ item.amount > 0 ? 'ld-in' : 'ld-out' }}">{{ item.amount > 0 ? '+' }}{{ item.amount|ledger_money(item.currency) }}</td></tr>
+    {% endfor %}
+</table>
+{% endif %}
+{% endblock %}

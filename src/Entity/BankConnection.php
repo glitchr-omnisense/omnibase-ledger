@@ -7,6 +7,7 @@ use Base\Ledger\Repository\BankConnectionRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
+use Omnibank\Model\ConnectionState;
 
 /**
  * A book's access to a bank through one of Omnibank's gateways ("files",
@@ -46,6 +47,13 @@ class BankConnection
     #[ORM\Column(type: 'text', nullable: true)]
     private ?string $lastError = null;
 
+    /** How the access is doing, beside the consent: an Omnibank ConnectionState's value, from the last sync, the gateway's account or webhook. Pending until the first sync went through. */
+    #[ORM\Column(length: 24, options: ['default' => 'pending'])]
+    private string $connectionState = 'pending';
+
+    #[ORM\Column(type: 'datetime_immutable', nullable: true)]
+    private ?\DateTimeImmutable $connectionStateAt = null;
+
     #[ORM\Column(type: 'datetime_immutable')]
     private \DateTimeImmutable $createdAt;
 
@@ -82,6 +90,16 @@ class BankConnection
     public function getLastError(): ?string { return $this->lastError; }
     public function setLastError(?string $lastError): self { $this->lastError = null === $lastError ? null : mb_substr($lastError, 0, 2000); return $this; }
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
+    public function getConnectionState(): ConnectionState { return ConnectionState::of($this->connectionState); }
+    public function getConnectionStateAt(): ?\DateTimeImmutable { return $this->connectionStateAt; }
+
+    public function setConnectionState(ConnectionState $state, ?\DateTimeImmutable $at = null): self
+    {
+        $this->connectionState = $state->value;
+        $this->connectionStateAt = $at ?? new \DateTimeImmutable();
+
+        return $this;
+    }
 
     /** @return Collection<int, BankAccount> */
     public function getAccounts(): Collection { return $this->accounts; }

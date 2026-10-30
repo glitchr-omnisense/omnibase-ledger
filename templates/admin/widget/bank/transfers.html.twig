@@ -1,0 +1,15 @@
+{# Base\Ledger\Admin\Widget\Bank\TransfersWidgetType: this month's transfers in and out, beside last month's. #}
+{% extends '@Ledger/admin/widget/bank/_layout.html.twig' %}
+{% block subtitle %}{{ transfers.month|date('m/Y') }}{% endblock %}
+{% block body %}
+{% set current = transfers.current %}
+{% set previous = transfers.previous %}
+<div class="ld-hero">
+    <span class="ld-hero-value">{{ current.inCount + current.outCount }}</span>
+    <span class="ld-hero-unit">{{ 'dashboard.transfers.this_month'|trans({count: current.inCount + current.outCount}, 'ledger') }}</span>
+</div>
+<div class="ld-figures" style="margin-top: .8rem">
+    <div class="ld-figure"><span class="ld-label"><i class="fa-solid fa-arrow-down-long ld-in"></i> {{ 'dashboard.transfers.in'|trans({}, 'ledger') }}</span><span class="ld-value">{{ current.in|ledger_money(currency) }}</span><span class="ld-note">{{ 'dashboard.transfers.lines'|trans({count: current.inCount}, 'ledger') }} · {{ 'dashboard.transfers.last_month'|trans({amount: previous.in|ledger_compact(currency)}, 'ledger') }}</span></div>
+    <div class="ld-figure"><span class="ld-label"><i class="fa-solid fa-arrow-up-long"></i> {{ 'dashboard.transfers.out'|trans({}, 'ledger') }}</span><span class="ld-value">{{ current.out|ledger_money(currency) }}</span><span class="ld-note">{{ 'dashboard.transfers.lines'|trans({count: current.outCount}, 'ledger') }} · {{ 'dashboard.transfers.last_month'|trans({amount: previous.out|ledger_compact(currency)}, 'ledger') }}</span></div>
+</div>
+{% endblock %}

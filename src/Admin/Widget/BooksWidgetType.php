@@ -3,7 +3,7 @@
 namespace Base\Ledger\Admin\Widget;
 
 use Base\Admin\Config\Menu\MenuItem;
-use Base\Admin\Widget\DashboardWidgetTypeInterface;
+use Base\Admin\Widget\PaletteDashboardWidgetTypeInterface;
 use Base\Ledger\Entity\Book;
 use Base\Ledger\Report\IncomeStatement;
 use Base\Ledger\Repository\BookRepository;
@@ -22,7 +22,7 @@ use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
  *
  *   MenuItem::block('ledger_books', 'Comptabilité', 'fa-solid fa-book')
  */
-final class BooksWidgetType implements DashboardWidgetTypeInterface
+final class BooksWidgetType implements PaletteDashboardWidgetTypeInterface
 {
     private const MAX_BOOKS = 4;
 
@@ -38,6 +38,16 @@ final class BooksWidgetType implements DashboardWidgetTypeInterface
     public static function getName(): string
     {
         return 'ledger_books';
+    }
+
+    public function getDefaultLabel(): string
+    {
+        return 'ledger_widget.books';
+    }
+
+    public function getDefaultIcon(): ?string
+    {
+        return 'fa-solid fa-book';
     }
 
     public function getTemplate(): string

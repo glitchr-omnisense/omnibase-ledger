@@ -1,0 +1,19 @@
+{# Base\Ledger\Admin\Widget\Bank\CategoriesWidgetType: what went out, by category. #}
+{% extends '@Ledger/admin/widget/bank/_layout.html.twig' %}
+{% block body %}
+{% if spending is empty %}
+    <p class="ld-empty">{{ 'dashboard.categories.nothing'|trans({}, 'ledger') }}</p>
+{% else %}
+<div class="ld-hero"><span class="ld-hero-value">{{ total|ledger_money(currency) }}</span><span class="ld-hero-unit">{{ 'dashboard.categories.spent'|trans({}, 'ledger') }}</span></div>
+<ul class="ld-rows" style="margin-top: .6rem">
+    {% for row in spending %}
+    <li class="{{ row.category == 'none' ? 'ld-s0' : 'ld-s2' }}">
+        <span class="ld-main"><strong>{{ ('dashboard.category.' ~ row.category)|trans({}, 'ledger') }}</strong></span>
+        <span class="ld-amount">{{ row.out|ledger_money(currency) }} <span class="ld-muted">{{ row.share|round }} %</span></span>
+        <span class="ld-meter"><span style="width: {{ row.width }}%"></span></span>
+    </li>
+    {% endfor %}
+</ul>
+{% if not categorised %}<p class="ld-muted" style="margin: .6rem 0 0">{{ 'dashboard.categories.none_given'|trans({}, 'ledger') }}</p>{% endif %}
+{% endif %}
+{% endblock %}

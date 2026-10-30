@@ -49,6 +49,11 @@ class WebhookController extends AbstractController
             return new Response('', Response::HTTP_ACCEPTED); // not one of ours, or not connected yet
         }
 
+        if (null !== $notification->state) {
+            $connection->setConnectionState($notification->state);
+            $this->entityManager->flush();
+        }
+
         if (ConsentStatus::NONE !== $notification->consent->status) {
             $connection->setConsentStatus(ConsentState::of($notification->consent->status));
             $connection->setExpiresAt($notification->consent->expiresAt ?? $connection->getExpiresAt());

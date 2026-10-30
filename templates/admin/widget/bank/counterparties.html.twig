@@ -1,0 +1,22 @@
+{# Base\Ledger\Admin\Widget\Bank\CounterpartiesWidgetType: who paid in and who was paid the most. #}
+{% extends '@Ledger/admin/widget/bank/_layout.html.twig' %}
+{% block body %}
+<div class="ld-split">
+    {% for side, rows in top %}
+    <div>
+        <h3>{{ ('dashboard.counterparties.' ~ side)|trans({}, 'ledger') }}</h3>
+        {% if rows is empty %}<p class="ld-empty">{{ 'dashboard.counterparties.none'|trans({}, 'ledger') }}</p>{% else %}
+        <ul class="ld-rows">
+            {% for row in rows %}
+            <li class="{{ side == 'in' ? 'ld-s1' : 'ld-s2' }}">
+                <span class="ld-main"><strong>{{ row.name }}</strong><span class="ld-muted">{{ 'dashboard.transfers.lines'|trans({count: row.count}, 'ledger') }}</span></span>
+                <span class="ld-amount">{{ side == 'in' ? '+' : '−' }}{{ row.amount|ledger_money(currency) }}</span>
+                <span class="ld-meter"><span style="width: {{ row.width }}%"></span></span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}

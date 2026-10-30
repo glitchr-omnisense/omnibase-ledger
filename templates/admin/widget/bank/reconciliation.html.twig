@@ -1,0 +1,22 @@
+{# Base\Ledger\Admin\Widget\Bank\ReconciliationWidgetType: the lines reconciled, suggested, to reconcile, ignored. #}
+{% extends '@Ledger/admin/widget/bank/_layout.html.twig' %}
+{% block subtitle %}{{ 'dashboard.transfers.lines'|trans({count: state.total}, 'ledger') }}{% endblock %}
+{% block body %}
+{% set icons = {reconciled: 'fa-circle-check', suggested: 'fa-wand-magic-sparkles', unmatched: 'fa-circle-exclamation', ignored: 'fa-circle-minus'} %}
+<div class="ld-hero"><span class="ld-hero-value">{{ state.pending }}</span><span class="ld-hero-unit">{{ 'dashboard.reconciliation.pending'|trans({count: state.pending}, 'ledger') }}</span></div>
+<div class="ld-stack" role="img" aria-label="{% for status in ['reconciled', 'suggested', 'unmatched', 'ignored'] %}{{ ('status.' ~ status)|trans({}, 'ledger') }} {{ shares[status]|round }} %{{ not loop.last ? ', ' }}{% endfor %}">
+    {% for status in ['reconciled', 'suggested', 'unmatched', 'ignored'] %}{% if state.counts[status] > 0 %}<span class="ld-seg is-{{ status }}" style="flex: {{ shares[status] }} 1 0" title="{{ ('status.' ~ status)|trans({}, 'ledger') }} : {{ state.counts[status] }}"></span>{% endif %}{% endfor %}
+</div>
+<ul class="ld-states">
+    {% for status in ['reconciled', 'suggested', 'unmatched', 'ignored'] %}
+    <li class="is-{{ status }}"><i class="fa-solid {{ icons[status] }}" aria-hidden="true"></i><span>{{ ('status.' ~ status)|trans({}, 'ledger') }}</span><span class="ld-pct">{{ shares[status]|round }} %</span><span class="ld-count">{{ state.counts[status] }}</span></li>
+    {% endfor %}
+</ul>
+<div class="ld-foot">
+    {% if state.first %}
+        <a class="ld-link" href="{{ path('ledger_admin_reconcile', {bankAccount: state.first.id}) }}">{{ 'dashboard.reconciliation.go'|trans({account: state.first.name}, 'ledger') }} <i class="fa-solid fa-arrow-right"></i></a>
+    {% else %}
+        <span class="ld-muted"><i class="fa-solid fa-check"></i> {{ 'reconcile.all_done'|trans({}, 'ledger') }}</span>
+    {% endif %}
+</div>
+{% endblock %}

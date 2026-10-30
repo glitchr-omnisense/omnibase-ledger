@@ -1,0 +1,18 @@
+{# Base\Ledger\Admin\Widget\Bank\MovementsWidgetType: the period's largest movements, in or out. #}
+{% extends '@Ledger/admin/widget/bank/_layout.html.twig' %}
+{% block body %}
+{% if movements is empty %}
+    <p class="ld-empty">{{ 'dashboard.movements.nothing'|trans({}, 'ledger') }}</p>
+{% else %}
+<table class="ld-table">
+    {% for line in movements %}
+    <tr>
+        <td class="ld-date">{{ line.bookedOn|date('d/m') }}</td>
+        <td class="ld-ellipsis"><strong>{{ line.counterpartyName ?: line.label }}</strong><br><span class="ld-muted">{{ line.label }} · {{ line.bankAccount.name }}</span></td>
+        <td class="ld-hide-narrow"><span class="ld-pill {{ line.status.value == 'reconciled' ? 'is-ok' : (line.status.pending ? 'is-wait') }}">{{ ('status.' ~ line.status.value)|trans({}, 'ledger') }}</span></td>
+        <td class="ld-amount {{ line.amount > 0 ? 'ld-in' : 'ld-out' }}">{{ line.amount > 0 ? '+' }}{{ line.amount|ledger_money(line.currency) }}</td>
+    </tr>
+    {% endfor %}
+</table>
+{% endif %}
+{% endblock %}

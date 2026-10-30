@@ -1,0 +1,27 @@
+{# Base\Ledger\Admin\Widget\Bank\ConnectionsWidgetType: the bank accesses by state, the renewals due. #}
+{% extends '@Ledger/admin/widget/bank/_layout.html.twig' %}
+{% block subtitle %}{{ 'dashboard.connections.count'|trans({count: state.total}, 'ledger') }}{% endblock %}
+{% block body %}
+{% set icons = {ok: 'fa-circle-check', action: 'fa-triangle-exclamation', unavailable: 'fa-cloud', error: 'fa-circle-xmark'} %}
+<div class="ld-stack" role="img" aria-label="{% for group, count in state.groups %}{{ ('dashboard.connections.' ~ group)|trans({}, 'ledger') }} {{ shares[group]|round }} %{{ not loop.last ? ', ' }}{% endfor %}">
+    {% for group, count in state.groups %}{% if count > 0 %}<span class="ld-seg is-{{ group }}" style="flex: {{ shares[group] }} 1 0" title="{{ ('dashboard.connections.' ~ group)|trans({}, 'ledger') }} : {{ count }}"></span>{% endif %}{% endfor %}
+</div>
+<ul class="ld-states">
+    {% for group, count in state.groups %}
+    <li class="is-{{ group }}"><i class="fa-solid {{ icons[group] }}" aria-hidden="true"></i><span>{{ ('dashboard.connections.' ~ group)|trans({}, 'ledger') }}</span><span class="ld-pct">{{ shares[group]|round }} %</span><span class="ld-count">{{ count }}</span></li>
+    {% endfor %}
+</ul>
+<ul class="ld-rows" style="margin-top: .8rem">
+    {% for row in listed %}
+    <li><span class="ld-main"><strong>{{ row.connection }}</strong><span class="ld-muted">{% if row.connection.name|lower != row.connection.gateway|lower %}{{ row.connection.gateway|capitalize }} · {% endif %}{{ 'dashboard.accounts_count'|trans({count: row.connection.accounts|length}, 'ledger') }}{% if row.state.group() != 'ok' and row.connection.lastError %} · {{ row.connection.lastError|length > 50 ? row.connection.lastError|slice(0, 49) ~ '…' : row.connection.lastError }}{% endif %}</span></span>
+        {% if row.state.needsUser() and row.connection.gateway != 'files' and can_manage %}<a class="ld-pill is-alert" href="{{ path('ledger_admin_bank_renew', {connection: row.connection.id, _token: csrf_token('ledger_bank_renew_' ~ row.connection.id)}) }}">{{ 'dashboard.connections.renew'|trans({}, 'ledger') }}</a>{% else %}<span class="ld-pill {{ row.state.group() == 'ok' ? 'is-ok' : (row.state.group() == 'error' ? 'is-alert' : 'is-wait') }}">{{ ('dashboard.state.' ~ row.state.value)|trans({}, 'ledger') }}</span>{% endif %}</li>
+    {% endfor %}
+    {% for connection in renewals %}
+    <li><span class="ld-main"><strong>{{ connection }}</strong><span class="ld-muted">{{ 'dashboard.connections.expires'|trans({date: connection.expiresAt ? connection.expiresAt|date('d/m/Y') : '-'}, 'ledger') }}</span></span><span class="ld-pill is-wait">{{ 'dashboard.connections.renewal_due'|trans({}, 'ledger') }}</span></li>
+    {% endfor %}
+</ul>
+<div class="ld-foot">
+    <span class="ld-muted">{{ 'dashboard.connections.renewals'|trans({count: state.renewals|length}, 'ledger') }}</span>
+    {% if connections_url %}<a class="ld-link" href="{{ connections_url }}">{{ 'dashboard.see_more'|trans({}, 'ledger') }} <i class="fa-solid fa-arrow-right"></i></a>{% endif %}
+</div>
+{% endblock %}

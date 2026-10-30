@@ -1,0 +1,25 @@
+{# Base\Ledger\Admin\Widget\Bank\KindsWidgetType: accounts by kind, a donut and its legend. #}
+{% extends '@Ledger/admin/widget/bank/_layout.html.twig' %}
+{% block subtitle %}{{ 'dashboard.accounts_count'|trans({count: total}, 'ledger') }}{% endblock %}
+{% block body %}
+<div class="ld-donut-wrap">
+    <svg class="ld-donut" viewBox="0 0 42 42" role="img" aria-label="{{ 'dashboard.kinds.aria'|trans({count: total}, 'ledger') }}">
+        <circle class="ld-donut-track" cx="21" cy="21" r="15.9155"></circle>
+        {% for kind in kinds %}
+        <circle class="ld-arc ld-s{{ kind.slot }}" cx="21" cy="21" r="15.9155" stroke-dasharray="{{ kind.dash }} {{ 100 - kind.dash }}" stroke-dashoffset="{{ kind.offset }}"><title>{{ ('dashboard.kind.' ~ kind.kind.value)|trans({}, 'ledger') }} : {{ kind.count }} ({{ kind.share|round }} %)</title></circle>
+        {% endfor %}
+        <text class="ld-donut-n" x="21" y="22.4">{{ total }}</text>
+        <text class="ld-donut-l" x="21" y="26.6">{{ 'dashboard.kinds.accounts'|trans({count: total}, 'ledger') }}</text>
+    </svg>
+    <ul class="ld-legend">
+        {% for kind in kinds %}
+        <li class="ld-s{{ kind.slot }}">
+            <span class="ld-swatch"></span>
+            <span class="ld-name">{{ ('dashboard.kind.' ~ kind.kind.value)|trans({}, 'ledger') }}</span>
+            <span class="ld-pct">{{ kind.share|round }} %</span>
+            <span class="ld-n" title="{{ kind.balance|ledger_money(currency) }}">{{ kind.count }} · {{ kind.balance|ledger_compact(currency) }}</span>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+{% endblock %}

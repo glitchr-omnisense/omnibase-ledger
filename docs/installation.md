@@ -134,7 +134,8 @@ yield MenuItem::block('ledger_bank', 'Banque', 'fa-solid fa-building-columns');
 yield MenuItem::block('ledger_books', 'Comptabilité', 'fa-solid fa-book');
 ```
 
-What each shows is in [The back office](back-office.md#dashboard-widgets).
+What each shows is in [The back office](back-office.md#dashboard-widgets), with the twelve bank
+cards (`ledger_bank_kinds`, `ledger_bank_statistics`...) a dashboard places the same way.
 
 ## A scheduled sync
 
@@ -143,4 +144,13 @@ What each shows is in [The back office](back-office.md#dashboard-widgets).
 ```
 
 imports the API-fed accounts' new lines and reconciles what is sure; statement-file accounts
-are skipped ([Bank feeds](usage-bank.md)).
+are skipped ([Bank feeds](usage-bank.md)). Once a day, the dashboard's precomputed rows:
+
+```cron
+30 4 * * *  bin/console ledger:bank:aggregate
+```
+
+The schema gains the tables `ledger_bank_day`, `ledger_bank_day_category`,
+`ledger_bank_counterparty_month`, `ledger_bank_recurring` and the columns
+`ledger_bank_account.kind`/`providerType`, `ledger_bank_connection.connectionState`/`connectionStateAt`,
+`ledger_bank_line.category`: a migration (`make:migration`), then `ledger:bank:aggregate` once.

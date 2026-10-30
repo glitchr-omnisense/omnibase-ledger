@@ -39,6 +39,7 @@ Ids are digits; `{gateway}` is `[a-z0-9_-]+`; `{year}` four digits. "View" and "
 |---|---|---|
 | `ledger:chart:seed` | `book` (id, SIREN or name); `--chart=` (a file of `config/charts/`, default `ledger.chart`) | adds the chart's missing accounts and journals |
 | `ledger:bank:sync` | `[book]`; `--no-reconcile` | syncs every API-fed bank account (all books, or one) and reconciles what is sure; `files` accounts are skipped; fails (exit 1) when an account failed, each reported as a warning |
+| `ledger:bank:aggregate` | `[book]` | writes every bank account's precomputed rows again (all books, or one), one line per account: how many days, category rows, counterparty rows and recurring flows |
 | `ledger:fec:export` | `book`, `year` (the year the fiscal year closes in); `--dir=` / `-d` (`.`); `--stdout` | writes `<SIREN>FEC<YYYYMMDD>.txt`, or prints it; a year that is not digits is exit 2 |
 
 An unknown book is an error and exit 1. `ledger:bank:sync` prints one line per account:
@@ -53,6 +54,11 @@ An unknown book is an error and exit 1. `ledger:bank:sync` prints one line per a
 | `ledger_money(currency = 'EUR', locale = null)` | `{{ 123456\|ledger_money }}` | `1 234,56 €` in a French locale (`NumberFormatter`, the default locale); `1 234,56 EUR` without intl |
 | `ledger_amount` | `{{ 123456\|ledger_amount }}` | `1 234,56`; empty for `0` and `null` (a report's column) |
 | `ledger_iban` | `{{ iban\|ledger_iban }}` | `FR76 •••• 4321` |
+| `ledger_compact(currency = 'EUR', locale = null)` | `{{ 1250000\|ledger_compact }}` | `12,5 k€` (a chart's axis, a tile) |
+| `ledger_month(locale = null)` | `{{ day\|ledger_month }}` | `oct.` |
+
+The function `ledger_once(key)` is true the first time it is asked in a request only (the bank
+cards' shared style, written once).
 
 ## Event
 
@@ -64,11 +70,14 @@ An unknown book is an error and exit 1. `ledger:bank:sync` prints one line per a
 
 `@Ledger/admin/`: `reconcile`, `upload`, `connect_files`, `trial_balance`, `general_ledger`,
 `open_items`, `income_statement`, `balance_sheet` (`.html.twig`), the partials `_period`,
-`_report_nav`, `_statement`, `_style`, and `widget/bank`, `widget/books`. An application
+`_report_nav`, `_statement`, `_style`, and `widget/bank`, `widget/books`, `widget/bank/` (`_layout`,
+`_style` and one per bank card). An application
 overrides one in `templates/bundles/LedgerBundle/admin/...`.
 
 ## Translations
 
 The domain `ledger` (ICU), in English and French (`translations/ledger+intl-icu.{en,fr}.yaml`):
-`status.*` (the bank lines' statuses), `reconcile.*`, `bank.*`, `report.*`. The CRUDs' labels
+`status.*` (the bank lines' statuses), `reconcile.*`, `bank.*`, `report.*`, `dashboard.*` (the
+bank cards: periods, series, kinds, categories, states, rhythms). The domain `admin`
+(`translations/admin.{en,fr}.yaml`): `ledger_widget.*`, the cards' names in the palette. The CRUDs' labels
 and the flash messages are written in French in the code.

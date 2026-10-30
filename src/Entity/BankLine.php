@@ -5,6 +5,7 @@ namespace Base\Ledger\Entity;
 use Base\Ledger\Enum\BankLineStatus;
 use Base\Ledger\Repository\BankLineRepository;
 use Doctrine\ORM\Mapping as ORM;
+use Omnibank\Model\TransactionCategory;
 
 /**
  * A transaction on a bank account's statement, as the bank booked it -
@@ -16,6 +17,7 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\Table(name: 'ledger_bank_line')]
 #[ORM\UniqueConstraint(name: 'ledger_bank_line_external', fields: ['bankAccount', 'externalId'])]
 #[ORM\Index(name: 'ledger_bank_line_status', fields: ['bankAccount', 'status'])]
+#[ORM\Index(name: 'ledger_bank_line_booked', fields: ['bankAccount', 'bookedOn'])]
 class BankLine
 {
     #[ORM\Id, ORM\GeneratedValue, ORM\Column]
@@ -55,6 +57,10 @@ class BankLine
 
     #[ORM\Column(type: 'json')]
     private array $raw = [];
+
+    /** What it was for: an Omnibank TransactionCategory's value, when the gateway categorised it. */
+    #[ORM\Column(length: 24, nullable: true)]
+    private ?string $category = null;
 
     #[ORM\Column(length: 16, enumType: BankLineStatus::class)]
     private BankLineStatus $status = BankLineStatus::UNMATCHED;
@@ -107,6 +113,8 @@ class BankLine
     public function setReference(?string $reference): self { $this->reference = null === $reference ? null : mb_substr($reference, 0, 255); return $this; }
     public function getRaw(): array { return $this->raw; }
     public function setRaw(array $raw): self { $this->raw = $raw; return $this; }
+    public function getCategory(): ?TransactionCategory { return TransactionCategory::of($this->category); }
+    public function setCategory(?TransactionCategory $category): self { $this->category = $category?->value; return $this; }
     public function getStatus(): BankLineStatus { return $this->status; }
     public function setStatus(BankLineStatus $status): self { $this->status = $status; return $this; }
     public function getEntry(): ?Entry { return $this->entry; }

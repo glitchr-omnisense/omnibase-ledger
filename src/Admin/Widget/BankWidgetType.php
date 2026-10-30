@@ -3,7 +3,7 @@
 namespace Base\Ledger\Admin\Widget;
 
 use Base\Admin\Config\Menu\MenuItem;
-use Base\Admin\Widget\DashboardWidgetTypeInterface;
+use Base\Admin\Widget\PaletteDashboardWidgetTypeInterface;
 use Base\Ledger\Bank\Connections;
 use Base\Ledger\Bank\StatementUpload;
 use Base\Ledger\Entity\Book;
@@ -25,7 +25,7 @@ use Symfony\Component\Security\Core\Authorization\AuthorizationCheckerInterface;
  *
  *   MenuItem::block('ledger_bank', 'Banque', 'fa-solid fa-building-columns')
  */
-final class BankWidgetType implements DashboardWidgetTypeInterface
+final class BankWidgetType implements PaletteDashboardWidgetTypeInterface
 {
     /** Gateways a user connects to through the provider's page, by their usual names. */
     private const LABELS = ['powens' => 'Powens', 'bridge' => 'Bridge', 'qonto' => 'Qonto'];
@@ -43,6 +43,16 @@ final class BankWidgetType implements DashboardWidgetTypeInterface
     public static function getName(): string
     {
         return 'ledger_bank';
+    }
+
+    public function getDefaultLabel(): string
+    {
+        return 'ledger_widget.bank';
+    }
+
+    public function getDefaultIcon(): ?string
+    {
+        return 'fa-solid fa-building-columns';
     }
 
     public function getTemplate(): string

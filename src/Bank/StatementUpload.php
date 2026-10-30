@@ -6,7 +6,9 @@ use Base\Ledger\Entity\BankAccount;
 use Base\Ledger\Exception\BankException;
 use Doctrine\ORM\EntityManagerInterface;
 use Omnibank\Model\Account as BankAccountModel;
+use Omnibank\Model\AccountKind;
 use Omnibank\Model\Connection;
+use Omnibank\Model\ConnectionState;
 use Omnibank\Model\Consent;
 use Omnibank\Request\FetchBalances;
 
@@ -24,6 +26,7 @@ class StatementUpload
         private readonly EntityManagerInterface $entityManager,
         private readonly Connections $connections,
         private readonly Importer $importer,
+        private readonly ?Aggregates $aggregates = null,
     ) {
     }
 
@@ -44,6 +47,10 @@ class StatementUpload
 
         try {
             $model = $this->pick($account, $gateway->accounts($omnibank), $name);
+            // A statement that says what the account is (CAMT.053's Acct/Tp, OFX's ACCTTYPE) sets its kind; one that does not leaves it as set.
+            if (AccountKind::UNKNOWN !== $model->kind) {
+                $account->setKind($model->kind)->setProviderType($model->type);
+            }
             $created = $this->importer->import($account, $gateway->transactions($omnibank, $model));
             if ($gateway->supports(FetchBalances::class)) {
                 $balances = $gateway->balances($omnibank, $model);
@@ -61,7 +68,9 @@ class StatementUpload
             throw new BankException(sprintf('%s: %s', $name, $e->getMessage()), 0, $e);
         }
         $account->setLastSyncedAt(new \DateTimeImmutable());
+        $account->getConnection()->setConnectionState(ConnectionState::OK);
         $this->entityManager->flush();
+        $this->aggregates?->rebuild($account);
 
         return $created;
     }

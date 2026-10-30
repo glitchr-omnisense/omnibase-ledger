@@ -111,6 +111,48 @@ user may view:
 - with no account yet: "Connecter une banque" for each configured gateway but `files`
   (Powens, Bridge, Qonto by name), and "Importer un relevé" when `files` is configured.
 
+### The bank cards
+
+Twelve cards of omnibase/admin's palette (`Base\Ledger\Admin\Widget\Bank\*WidgetType`,
+`@Ledger/admin/widget/bank/*.html.twig`), read from the precomputed rows
+([Bank feeds](usage-bank.md#what-the-dashboard-reads)) through `Base\Ledger\Bank\Dashboard`, for
+the bank accounts of the books the user may view:
+
+| Block name | Card | Period |
+|---|---|---|
+| `ledger_bank_kinds` | accounts by kind: a donut, its legend with the share, the count and what each kind holds | - |
+| `ledger_bank_balance` | what the accounts hold per currency, its change over the period and its line; the credits and the net beside | 1m |
+| `ledger_bank_connections` | the connections by state (working, action needed, bank unavailable, failing) as one stacked bar, each connection and its state, "Reconnecter" where the user must act, the consents ending within 30 days, "Voir plus" to the connections' list | - |
+| `ledger_bank_transfers` | this month's transfers in and out, count and amount, beside last month's | - |
+| `ledger_bank_statistics` | in and out per day, week or month as bars, the balance as a line above them on its own scale; 10 days, 1, 3, 6, 12 months switched in the card; each series shown or hidden; a tooltip per bucket | 3m |
+| `ledger_bank_categories` | what went out by category, the largest first | 3m |
+| `ledger_bank_counterparties` | the five that paid in and the five that took out the most | 3m |
+| `ledger_bank_recurring` | the recurring flows, their amount, rhythm and next date, what they make a month (a transfer between two accounts shown, both ways, left out) | - |
+| `ledger_bank_forecast` | today's balance carried 90 days by the recurring flows: at 30, 60, 90 days, the lowest point, the next payments | - |
+| `ledger_bank_reconciliation` | lines reconciled, suggested, to reconcile, ignored; the way to the account with the most to do | - |
+| `ledger_bank_freshness` | each account's last sync, the stale first (3 days for an API, 35 for statements), sync or upload | - |
+| `ledger_bank_movements` | the eight largest lines of the period (the one card that reads lines, by an indexed query) | 1m |
+
+Each takes two parameters, set in the layout editor through the card's ⋮ panel (omnibase/admin's
+generic `[data-widget-settings-*]` panel) or in code: `period` (`10d`, `1m`, `3m`, `6m`, `12m`) for
+the cards with one, and `accounts` (bank account ids; none is every account). The cards about cash
+(statistics, categories, counterparties, recurring, forecast, transfers, movements) leave the
+credits (loans, consumer and revolving credits) out unless accounts are picked. A site places
+them in its dashboard controller, or a superadmin adds them from "+ Ajouter un widget":
+
+```php
+yield MenuItem::block('ledger_bank_balance', 'Solde agrégé', 'fa-solid fa-sack-dollar')->setSize(1);
+yield MenuItem::block('ledger_bank_statistics', 'Statistiques générales', 'fa-solid fa-chart-column')->setSize(4)->setParams(['period' => '12m']);
+```
+
+The charts are markup - inline SVG and CSS on omnibase/admin's tokens, light and dark - not
+Chart.js: admin's analytics cards draw with the line controller of omnisense/omnibase's
+`admin-charts` build only, a donut or bars would mean rebuilding that core's assets, and markup
+needs no script to start in a card the palette inserts. The series take the validated categorical
+palette's slots in order; states take the status colours with an icon and a label.
+
+`ledger_bank` and `ledger_books` below are palette cards too.
+
 `ledger_books` (`BooksWidgetType`, `@Ledger/admin/widget/books.html.twig`), for up to four
 books the user may view: the current fiscal year to date - income, expenses and result (the
 compte de résultat's totals), open receivables (open debits on `411`), open payables (open

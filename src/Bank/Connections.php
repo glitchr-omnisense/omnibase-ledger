@@ -19,6 +19,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use Omnibank\GatewayInterface;
 use Omnibank\Model\Account as BankAccountModel;
 use Omnibank\Model\Connection;
+use Omnibank\Model\ConnectionState;
 use Omnibank\Registry;
 
 /**
@@ -147,7 +148,9 @@ class Connections
         if (null !== $result->url) {
             return $result->url;
         }
-        $this->discover($connection);
+        // Through: the accounts found, the access works; none yet, the provider is still reading the bank.
+        $connection->setConnectionState($this->discover($connection) > 0 || !$connection->getAccounts()->isEmpty() ? ConnectionState::OK : ConnectionState::PENDING);
+        $this->entityManager->flush();
 
         return null;
     }
@@ -210,6 +213,9 @@ class Connections
         }
 
         $bankAccount = new BankAccount($connection, $externalId, $name, $ledgerAccount, $journal, $iban, $currency);
+        if ($account instanceof BankAccountModel) {
+            $bankAccount->setKind($account->kind)->setProviderType($account->type);
+        }
         $this->entityManager->persist($bankAccount);
 
         return $bankAccount;

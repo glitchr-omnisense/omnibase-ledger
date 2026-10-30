@@ -15,11 +15,15 @@ use Base\Ledger\Security\StateCipher;
 use Omnibank\GatewayFactoryInterface;
 use Omnibank\GatewayInterface;
 use Omnibank\Model\Account;
+use Omnibank\Model\AccountKind;
 use Omnibank\Model\Balance;
 use Omnibank\Model\BankTransaction;
 use Omnibank\Model\Connection;
+use Omnibank\Model\ConnectionState;
 use Omnibank\Model\Consent;
 use Omnibank\Model\Money;
+use Omnibank\Model\TransactionCategory;
+use Omnibank\Exception\ProviderException;
 use Omnibank\Registry;
 use Omnibank\Request\FetchBalances;
 use Tests\Base\Ledger\InMemoryLedger;
@@ -28,6 +32,7 @@ class SyncTest extends InMemoryLedger
 {
     private ?\DateTimeInterface $since = null;
     private ?\Throwable $failure = null;
+    private ?ConnectionState $accountState = null;
 
     protected function setUp(): void
     {
@@ -40,7 +45,7 @@ class SyncTest extends InMemoryLedger
     private function connections(): Connections
     {
         $gateway = $this->createStub(GatewayInterface::class);
-        $gateway->method('accounts')->willReturn([new Account('acc-1', 'FR7630006000011234567890189', null, 'Compte courant', 'EUR', 'checking')]);
+        $gateway->method('accounts')->willReturnCallback(fn () => [new Account('acc-1', 'FR7630006000011234567890189', null, 'Compte courant', 'EUR', 'checking', [], AccountKind::CHECKING, $this->accountState)]);
         $gateway->method('transactions')->willReturnCallback(function (Connection $connection, Account $account, ?\DateTimeInterface $since) {
             if (null !== $this->failure) {
                 throw $this->failure;
@@ -49,7 +54,7 @@ class SyncTest extends InMemoryLedger
 
             return [
                 new BankTransaction('t1', new \DateTimeImmutable('2026-10-01'), null, new Money(85000, 'EUR'), 'VIR SEPA LOYER', 'M DUPONT', null, null),
-                new BankTransaction('t2', new \DateTimeImmutable('2026-10-02'), null, new Money(-1250, 'EUR'), 'FRAIS', null, null, null),
+                new BankTransaction('t2', new \DateTimeImmutable('2026-10-02'), null, new Money(-1250, 'EUR'), 'FRAIS', null, null, null, [], TransactionCategory::BANK_FEES),
             ];
         });
         $gateway->method('supports')->willReturnCallback(fn (string $request) => FetchBalances::class === $request);
@@ -118,5 +123,43 @@ class SyncTest extends InMemoryLedger
         }
         self::assertSame(ConsentState::NEEDS_RENEWAL, $account->getConnection()->getConsentStatus());
         self::assertSame('HTTP 401: SCA required', $account->getConnection()->getLastError());
+    }
+
+    public function testASyncRecordsTheKindTheCategoriesAndTheConnectionsState(): void
+    {
+        $connections = $this->connections();
+        $account = $this->syncedAccount($connections, Consent::active());
+        $sync = new Sync($this->entityManager(), $connections, new Importer($this->entityManager(), $this->bankLineRepository()));
+
+        $sync->sync($account);
+        self::assertSame(AccountKind::CHECKING, $account->getKind());
+        self::assertSame('checking', $account->getProviderType());
+        self::assertSame(TransactionCategory::BANK_FEES, $this->bankLines[1]->getCategory());
+        self::assertNull($this->bankLines[0]->getCategory(), 'none given, none kept');
+        self::assertSame(ConnectionState::OK, $account->getConnection()->getConnectionState());
+
+        // Read with the account, the provider's own word for the access stands: the data came, stale.
+        $this->accountState = ConnectionState::ACTION_NEEDED;
+        $sync->sync($account);
+        self::assertSame(ConnectionState::ACTION_NEEDED, $account->getConnection()->getConnectionState());
+
+        // A refusal says what it means for the access.
+        $this->failure = new ProviderException('powens', 'Wrong password', 'wrongpass', null, ConnectionState::WRONG_CREDENTIALS);
+        try {
+            $sync->sync($account);
+            self::fail('refused');
+        } catch (BankException) {
+        }
+        self::assertSame(ConnectionState::WRONG_CREDENTIALS, $account->getConnection()->getConnectionState());
+        self::assertSame(ConsentState::NEEDS_RENEWAL, $account->getConnection()->getConsentStatus(), 'the user must go through the bank\'s page again');
+
+        $this->failure = new \Omnibank\Exception\UnavailableException('powens', 'HTTP 503');
+        $account->getConnection()->setConsentStatus(ConsentState::ACTIVE);
+        $connections->store($account->getConnection(), new Connection(['user' => 'u-1'], Consent::active()));
+        try {
+            $sync->sync($account);
+        } catch (BankException) {
+        }
+        self::assertSame(ConnectionState::BANK_UNAVAILABLE, $account->getConnection()->getConnectionState());
     }
 }

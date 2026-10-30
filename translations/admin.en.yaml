@@ -1,0 +1,16 @@
+# The palette's names of omnibase/ledger's dashboard cards (omnibase/admin translates them in its "admin" domain).
+ledger_widget:
+  bank: "Bank"
+  books: "Accounting"
+  kinds: "Accounts by kind"
+  balance: "Aggregated balance"
+  connections: "Connections state"
+  transfers: "Transfers"
+  statistics: "General statistics"
+  categories: "Spending by category"
+  counterparties: "Top counterparties"
+  recurring: "Recurring flows"
+  forecast: "Cash forecast"
+  reconciliation: "Reconciliation"
+  freshness: "Freshness"
+  movements: "Largest movements"

@@ -1,0 +1,47 @@
+{# The frame every bank card shares (Base\Ledger\Admin\Widget\Bank\AbstractBankWidgetType):
+   its title and what it covers, the ⋮ settings the layout editor opens
+   (period, accounts - omnibase/admin's generic [data-widget-settings-*]),
+   then the card's own body. The style is written once per page. #}
+{% if allowed %}
+<div class="analytics-card {{ (embedded is not defined or not embedded) ? 'card' }} ld-card ld-card-{{ card }}" data-ledger-card="{{ card }}">
+    <div class="analytics-card-header ld-head">
+        <div class="ld-titles">
+            <h2 class="analytics-card-title">{{ widget.label|trans({}, 'admin') }}</h2>
+            <span class="ld-sub">
+                {%- block subtitle %}{% if period %}{{ ('dashboard.period.' ~ period.key)|trans({}, 'ledger') }}{% endif %}{% endblock -%}
+                {%- if picked is not empty %} · {{ 'dashboard.accounts_count'|trans({count: accounts|length}, 'ledger') }}{% endif -%}
+            </span>
+        </div>
+        <button type="button" class="item-settings" data-widget-settings-toggle title="{{ 'dashboard.settings'|trans({}, 'ledger') }}" aria-label="{{ 'dashboard.settings'|trans({}, 'ledger') }}"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+    </div>
+    <div class="widget-settings-panel" data-widget-settings-panel hidden>
+        {% if periods is not empty %}
+        <label class="widget-settings-field">
+            <span>{{ 'dashboard.period_label'|trans({}, 'ledger') }}</span>
+            <select data-widget-param="period">
+                {% for key in periods %}<option value="{{ key }}"{{ period and period.key == key ? ' selected' }}>{{ ('dashboard.period.' ~ key)|trans({}, 'ledger') }}</option>{% endfor %}
+            </select>
+        </label>
+        {% endif %}
+        <fieldset class="widget-settings-field">
+            <span>{{ 'dashboard.accounts_label'|trans({}, 'ledger') }}</span>
+            <div class="widget-settings-checks">
+                {% for account in allAccounts %}
+                <label class="widget-settings-check"><input type="checkbox" data-widget-param="accounts" value="{{ account.id }}"{{ account.id in picked ? ' checked' }}><span>{{ account.name }}</span></label>
+                {% endfor %}
+            </div>
+            <small class="ld-muted">{{ 'dashboard.accounts_help'|trans({}, 'ledger') }}</small>
+        </fieldset>
+        <div class="widget-settings-actions">
+            <button type="button" class="analytics-range-btn" data-widget-settings-cancel>{{ 'dashboard.cancel'|trans({}, 'ledger') }}</button>
+            <button type="button" class="analytics-range-btn is-active" data-widget-settings-apply>{{ 'dashboard.apply'|trans({}, 'ledger') }}</button>
+        </div>
+    </div>
+    {% if accounts is empty %}
+        <p class="ld-empty">{{ 'dashboard.no_account'|trans({}, 'ledger') }}</p>
+    {% else %}
+        {% block body %}{% endblock %}
+    {% endif %}
+</div>
+{% if ledger_once('ledger-dashboard-style') %}{{ include('@Ledger/admin/widget/bank/_style.html.twig') }}{% endif %}
+{% endif %}

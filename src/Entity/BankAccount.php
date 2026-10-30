@@ -4,6 +4,7 @@ namespace Base\Ledger\Entity;
 
 use Base\Ledger\Repository\BankAccountRepository;
 use Doctrine\ORM\Mapping as ORM;
+use Omnibank\Model\AccountKind;
 
 /**
  * One account at the bank, as its connection's gateway sees it ($externalId),
@@ -53,6 +54,14 @@ class BankAccount
     #[ORM\Column(type: 'datetime_immutable', nullable: true)]
     private ?\DateTimeImmutable $bankBalanceAt = null;
 
+    /** What the account is: an Omnibank AccountKind's value, the gateway's mapping of its own word ($providerType). Stored as text, so a kind added later reads as unknown, never as an error. */
+    #[ORM\Column(length: 24, options: ['default' => 'unknown'])]
+    private string $kind = 'unknown';
+
+    /** The gateway's own word for the account's type, as it gave it ("livret_a", "CACC"...). */
+    #[ORM\Column(length: 64, nullable: true)]
+    private ?string $providerType = null;
+
     public function __construct(BankConnection $connection, string $externalId, string $name, Account $account, Journal $journal, ?string $iban = null, ?string $currency = null)
     {
         $this->connection = $connection;
@@ -98,6 +107,17 @@ class BankAccount
     public function setLastSyncedAt(?\DateTimeImmutable $lastSyncedAt): self { $this->lastSyncedAt = $lastSyncedAt; return $this; }
     public function getBankBalance(): ?int { return null === $this->bankBalance ? null : (int) $this->bankBalance; }
     public function getBankBalanceAt(): ?\DateTimeImmutable { return $this->bankBalanceAt; }
+
+    public function getKind(): AccountKind { return AccountKind::of($this->kind); }
+    public function setKind(AccountKind $kind): self { $this->kind = $kind->value; return $this; }
+    public function getProviderType(): ?string { return $this->providerType; }
+    public function setProviderType(?string $type): self { $this->providerType = null === $type ? null : mb_substr($type, 0, 64); return $this; }
+
+    /** The balance to show: the bank's last one, else what its lines add up to ($fallback). */
+    public function getCurrentBalance(?int $fallback = null): ?int
+    {
+        return $this->getBankBalance() ?? $fallback;
+    }
 
     public function setBankBalance(?int $balance, ?\DateTimeImmutable $at = null): self
     {

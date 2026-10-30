@@ -51,7 +51,8 @@ class Importer
                 ->setCounterpartyName($transaction->counterpartyName)
                 ->setCounterpartyIban($transaction->counterpartyIban)
                 ->setReference($transaction->reference)
-                ->setRaw($transaction->raw);
+                ->setRaw($transaction->raw)
+                ->setCategory($transaction->category ?? $line->getCategory());
             $seen[$transaction->id] = true;
         }
         $this->entityManager->flush();
