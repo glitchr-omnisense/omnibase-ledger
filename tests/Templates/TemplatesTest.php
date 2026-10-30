@@ -159,6 +159,12 @@ class TemplatesTest extends InMemoryLedger
         self::assertStringContainsString('1 à rapprocher', $html);
         self::assertStringContainsString('is-out', $html);
         self::assertStringContainsString('À rapprocher', $html);
+        // A book that already has an account (a statement imported) can still connect a bank.
+        self::assertSame(1, substr_count($html, 'Connecter une banque (Powens)'));
+
+        $html = $this->twig->render('@Ledger/admin/widget/bank.html.twig', ['widget' => $widget, 'allowed' => true, 'can_manage' => false, 'book' => $this->book, 'files' => true, 'gateways' => ['powens' => 'Powens'],
+            'accounts' => [['account' => $this->bankAccount(), 'balance' => 125000, 'bankBalance' => null, 'bankBalanceAt' => null, 'connection' => $connection, 'needsRenewal' => false, 'pending' => 0]], 'latest' => []]);
+        self::assertStringNotContainsString('Connecter une banque', $html, 'only who manages the books connects a bank');
 
         $html = $this->twig->render('@Ledger/admin/widget/bank.html.twig', ['widget' => $widget, 'allowed' => true, 'can_manage' => true, 'book' => $this->book, 'files' => true, 'gateways' => ['powens' => 'Powens', 'bridge' => 'Bridge'], 'accounts' => [], 'latest' => []]);
         self::assertSame(2, substr_count($html, 'Connecter une banque'));

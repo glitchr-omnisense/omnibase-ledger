@@ -5,13 +5,12 @@
     <div class="analytics-card-header">
         <h2 class="analytics-card-title">{{ widget.label|trans({}, 'admin') }}</h2>
     </div>
-    {% if accounts is empty %}
-    <div class="ledger-bank-empty">
-        <p>Aucun compte bancaire pour l'instant. Connectez la banque pour que ses opérations arrivent seules, ou importez un relevé.</p>
+    {# Who manages the books can connect a bank or import a statement, before the first account as after it. #}
+    {% set actions %}
         {% if can_manage %}
         <div class="ledger-bank-actions">
             {% for name, label in gateways %}
-                <a class="btn btn-primary" href="{{ path('ledger_admin_bank_connect', {gateway: name, book: book.id, _token: csrf_token('ledger_bank_connect')}) }}"><i class="fa-solid fa-building-columns"></i> Connecter une banque ({{ label }})</a>
+                <a class="btn {{ accounts is empty ? 'btn-primary' : 'btn-secondary' }}" href="{{ path('ledger_admin_bank_connect', {gateway: name, book: book.id, _token: csrf_token('ledger_bank_connect')}) }}"><i class="fa-solid fa-building-columns"></i> Connecter une banque ({{ label }})</a>
             {% endfor %}
             {% if files %}
                 <a class="btn btn-secondary" href="{{ path('ledger_admin_bank_connect', {gateway: 'files', book: book.id}) }}"><i class="fa-solid fa-file-arrow-up"></i> Importer un relevé</a>
@@ -19,6 +18,11 @@
             {% if gateways is empty and not files %}<span class="ledger-muted">Configurez une passerelle Omnibank (omnibank.gateways) pour relier une banque.</span>{% endif %}
         </div>
         {% endif %}
+    {% endset %}
+    {% if accounts is empty %}
+    <div class="ledger-bank-empty">
+        <p>Aucun compte bancaire pour l'instant. Connectez la banque pour que ses opérations arrivent seules, ou importez un relevé.</p>
+        {{ actions }}
     </div>
     {% else %}
     <div class="ledger-bank-accounts">
@@ -58,10 +62,11 @@
         {% endfor %}
     </table>
     {% endif %}
+    {% if can_manage %}<div class="ledger-bank-more">{{ actions }}</div>{% endif %}
     {% endif %}
 </div>
 <style>
-    .ledger-bank-empty, .ledger-bank-accounts { padding: 0 1rem 1rem; }
+    .ledger-bank-empty, .ledger-bank-accounts, .ledger-bank-more { padding: 0 1rem 1rem; }
     .ledger-bank-empty p { margin: 0 0 .75rem; opacity: .8; }
     .ledger-bank-actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
     .ledger-bank-accounts { display: grid; gap: .5rem; }
