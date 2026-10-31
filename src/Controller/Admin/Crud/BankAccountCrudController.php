@@ -7,6 +7,7 @@ use Base\Admin\Config\Actions;
 use Base\Admin\Config\Crud;
 use Base\Admin\Controller\AbstractCrudController;
 use Base\Field\AssociationField;
+use Base\Field\BooleanField;
 use Base\Field\DateTimeField;
 use Base\Field\IdField;
 use Base\Field\TextField;
@@ -63,6 +64,8 @@ class BankAccountCrudController extends AbstractCrudController
         yield AssociationField::new('connection', 'Connexion')->hideOnForm();
         yield $this->pick('account', 'Compte (512)', Account::class, 'number')->setColumns(6);
         yield $this->pick('journal', 'Journal', Journal::class, 'code')->setColumns(6);
+        yield BooleanField::new('escrow', 'Compte séquestre')->setColumns(6)->hideOnIndex()
+            ->setHelp('L\'argent de tiers (les loyers des propriétaires en gérance, loi Hoguet) : leurs encaissements et leurs reversements y passent.');
         yield TextField::new('currency', 'Devise')->hideOnForm();
         yield TextField::new('bankBalance', 'Solde banque')->hideOnForm()
             // In the page's language (intl's default follows it), as the dashboard's cards print it.

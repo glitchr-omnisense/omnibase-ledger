@@ -63,7 +63,7 @@ IBAN).
 
 | Property | Column | Meaning |
 |---|---|---|
-| `kind` | `PartyKind` | tenant, supplier, associate, other |
+| `kind` | `PartyKind` | tenant, supplier, associate, other, mandator (an owner whose homes the company manages) |
 | `name` | `string(255)` | |
 | `iban` | `string(34)`, nullable | normalised (upper-case, alphanumeric): how the party's transfers are recognised |
 | `reference` | `string(64)`, nullable | the application's handle on them (a lease, a supplier code), unique in the book |
@@ -131,6 +131,12 @@ ledger `account` (`512x`) and `journal` (`BQ`, `BQ2`...), `lastSyncedAt`, and th
 `bankBalance` (`bigint`, minor units) with `bankBalanceAt`. `BankAccount::mask($iban)` shows
 `FR76 •••• 4321`.
 
+A bank account may hold money for third parties, not the company's own: `escrow`
+(`isEscrow()`, « Compte séquestre » on its screen) marks a property manager's escrow account
+(compte séquestre, loi Hoguet) - the owners' rents arrive there, their payouts leave from it.
+`BankAccountRepository::escrowFor($book)` gives the book's (omnibase/estate's `management`
+activity posts its owners' money to it).
+
 `BankLine` (`ledger_bank_line`, unique on bank account and external id, indexed on account
 and status): a transaction as the bank booked it.
 
@@ -191,7 +197,7 @@ an IBAN.
 | `AccountType` | `ASSET` `asset`, `LIABILITY` `liability`, `EQUITY` `equity`, `INCOME` `income`, `EXPENSE` `expense` | `isDebitNormal()` (asset, expense), `isResult()` (income, expense), `guess(string $number)` |
 | `BankLineStatus` | `UNMATCHED`, `SUGGESTED`, `RECONCILED`, `IGNORED` | `isPending()` (unmatched or suggested) |
 | `ConsentState` | `ACTIVE`, `NEEDS_RENEWAL`, `REVOKED`, `NONE` | `of()`: from Omnibank's `ConsentStatus` (or a string), by value or name, `NONE` otherwise |
-| `PartyKind` | `TENANT`, `SUPPLIER`, `ASSOCIATE`, `OTHER` | `collective()`: `411`, `401`, `455`, `467` |
+| `PartyKind` | `TENANT`, `SUPPLIER`, `ASSOCIATE`, `OTHER`, `MANDATOR` | `collective()`: `411`, `401`, `455`, `467`, `4671` (the owners' money a property manager holds) |
 | `RuleSign` | `ANY`, `IN`, `OUT` | `accepts(int $amount)` (`ANY` refuses `0`) |
 | `TaxKind` | `COLLECTED`, `DEDUCTIBLE`, `DEDUCTIBLE_ASSETS`, `REVERSE_CHARGE`, `EXEMPT` | `label()`, `isCreditNormal()` |
 | `VatRegime` | `NONE`, `FRANCHISE`, `SIMPLIFIED`, `NORMAL_MONTHLY`, `NORMAL_QUARTERLY` | `isLiable()`, `form()`, `label()`, `lastPeriod()` |

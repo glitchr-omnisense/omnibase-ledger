@@ -32,7 +32,7 @@ enum AccountType: string
         if (str_starts_with($number, '4')) {
             // Longest prefix first: the exceptions of each group before its rule.
             foreach (['409' => self::ASSET, '40' => self::LIABILITY, '419' => self::LIABILITY, '41' => self::ASSET, '42' => self::LIABILITY, '43' => self::LIABILITY,
-                '441' => self::ASSET, '4456' => self::ASSET, '4458' => self::ASSET, '44' => self::LIABILITY, '456' => self::ASSET, '45' => self::LIABILITY,
+                '441' => self::ASSET, '4456' => self::ASSET, '4458' => self::ASSET, '44' => self::LIABILITY, '456' => self::ASSET, '45' => self::LIABILITY, '4671' => self::LIABILITY,
                 '46' => self::ASSET, '47' => self::ASSET, '487' => self::LIABILITY, '48' => self::ASSET, '49' => self::ASSET] as $prefix => $type) {
                 if (str_starts_with($number, (string) $prefix)) {
                     return $type;

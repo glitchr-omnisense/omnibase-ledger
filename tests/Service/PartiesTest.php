@@ -42,4 +42,13 @@ class PartiesTest extends InMemoryLedger
         self::assertSame('455M1', $associate->getAccountNumber());
         self::assertSame('401EDF2', $twin->getAccountNumber());
     }
+
+    public function testAnOwnerUnderManagementHasTheirAccountUnderTheMandatorsOne(): void
+    {
+        $owner = $this->parties()->partyFor($this->book, PartyKind::MANDATOR, 'M12', 'Hélène Roth (mandant)');
+
+        self::assertSame(PartyKind::MANDATOR, $owner->getKind());
+        self::assertSame('4671M12', $owner->getAccountNumber(), '4671, the owners\' money the agency holds');
+        self::assertSame(AccountType::LIABILITY, $this->accounts['4671M12']->getType());
+    }
 }

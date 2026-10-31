@@ -3,6 +3,11 @@
 ## [Unreleased]
 
 ### Added
+- The owners' money a property manager holds, for omnibase/estate's `management` activity: a
+  bank account may be the escrow account (`BankAccount::$escrow`, an `escrow` column, false by
+  default; « Compte séquestre » on its screen; `BankAccountRepository::escrowFor()`), and a party
+  may be an owner under management (`PartyKind::MANDATOR`, its account under 4671, guessed a
+  liability: what the book owes them). `docs/concepts.md`.
 - VAT. Each book has a regime (`Book::$vatRegime`, `VatRegime`: `none` by default - a property
   company letting homes is not liable -, `franchise`, `simplified` (CA12), `normal_monthly`,
   `normal_quarterly` (CA3)). VAT codes per book (`Tax`, `ledger_tax`: code, label, rate in basis

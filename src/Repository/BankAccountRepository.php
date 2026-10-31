@@ -26,6 +26,18 @@ class BankAccountRepository extends ServiceEntityRepository
         return $qb->getQuery()->getResult();
     }
 
+    /** The book's escrow account (BankAccount::isEscrow(): the third parties' money), the first one if several. */
+    public function escrowFor(Book $book): ?BankAccount
+    {
+        foreach ($this->forBook($book) as $account) {
+            if ($account->isEscrow()) {
+                return $account;
+            }
+        }
+
+        return null;
+    }
+
     public function countForBook(Book $book): int
     {
         return (int) $this->createQueryBuilder('a')->select('COUNT(a.id)')->join('a.connection', 'c')

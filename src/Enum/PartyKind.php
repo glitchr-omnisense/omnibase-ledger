@@ -9,6 +9,8 @@ enum PartyKind: string
     case SUPPLIER = 'supplier';
     case ASSOCIATE = 'associate';
     case OTHER = 'other';
+    /** An owner whose property the book's company manages (a mandant): the money it holds for them. */
+    case MANDATOR = 'mandator';
 
     /** The PCG collective account a party of this kind gets an auxiliary account under. */
     public function collective(): string
@@ -18,6 +20,7 @@ enum PartyKind: string
             self::SUPPLIER => '401',
             self::ASSOCIATE => '455',
             self::OTHER => '467',
+            self::MANDATOR => '4671',
         };
     }
 }

@@ -62,6 +62,14 @@ class BankAccount
     #[ORM\Column(length: 64, nullable: true)]
     private ?string $providerType = null;
 
+    /**
+     * The account holds money for third parties, not the company's own: a
+     * property manager's escrow account (compte séquestre, loi Hoguet), where
+     * the owners' rents arrive and their payouts leave from.
+     */
+    #[ORM\Column(options: ['default' => false])]
+    private bool $escrow = false;
+
     public function __construct(BankConnection $connection, string $externalId, string $name, Account $account, Journal $journal, ?string $iban = null, ?string $currency = null)
     {
         $this->connection = $connection;
@@ -112,6 +120,8 @@ class BankAccount
     public function setKind(AccountKind $kind): self { $this->kind = $kind->value; return $this; }
     public function getProviderType(): ?string { return $this->providerType; }
     public function setProviderType(?string $type): self { $this->providerType = null === $type ? null : mb_substr($type, 0, 64); return $this; }
+    public function isEscrow(): bool { return $this->escrow; }
+    public function setEscrow(?bool $escrow): self { $this->escrow = (bool) $escrow; return $this; }
 
     /** The balance to show: the bank's last one, else what its lines add up to ($fallback). */
     public function getCurrentBalance(?int $fallback = null): ?int
