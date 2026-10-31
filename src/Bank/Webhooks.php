@@ -10,6 +10,7 @@ use Omnibank\Model\Webhook;
 use Omnibank\Registry;
 use Omnibank\Request\FetchWebhooks;
 use Omnibank\Request\RegisterWebhook;
+use Symfony\Component\Lock\LockFactory;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 /**
@@ -40,6 +41,7 @@ class Webhooks
         private readonly ?Registry $registry = null,
         private readonly ?SettingBagInterface $settings = null,
         private readonly ?Vault $vault = null,
+        private readonly ?LockFactory $locks = null,
     ) {
     }
 
@@ -122,6 +124,20 @@ class Webhooks
         if (null !== $this->configuredSecret($gateway)) {
             return self::CONFIGURED;
         }
+        // Two deploys at once (several web containers) would each replace the other's webhook:
+        // one at a time, over the site's lock store (LOCK_DSN, shared between the hosts).
+        $lock = $this->locks?->createLock('ledger.bank.webhook.'.$gateway, 120);
+        $lock?->acquire(true);
+        try {
+            return $this->register($gateway, $provider, $url, $force);
+        } finally {
+            $lock?->release();
+        }
+    }
+
+    /** @return self::KEPT|self::NO_VAULT|self::REGISTERED */
+    private function register(string $gateway, GatewayInterface $provider, string $url, bool $force): string
+    {
         if (!$force && null !== $this->secret($gateway) && $url === $this->stored($gateway, 'url') && $this->isRegistered($provider, (string) $this->stored($gateway, 'id'), $url)) {
             return self::KEPT;
         }

@@ -18,6 +18,8 @@ use Omnibank\Request\Notify;
 use Omnibank\Request\RegisterWebhook;
 use Omnibank\Request\Request;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 /**
@@ -78,7 +80,7 @@ final class WebhooksTest extends TestCase
             {
                 return new \Symfony\Component\Cache\Marshaller\SodiumMarshaller([sodium_crypto_box_keypair()]);
             }
-        });
+        }, class_exists(LockFactory::class) ? new LockFactory(new InMemoryStore()) : null);
     }
 
     public function testTheGatewayThatCanIsRegisteredOnceTheOtherLeftAlone(): void

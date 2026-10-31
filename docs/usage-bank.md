@@ -211,7 +211,10 @@ webhook on the address the router builds for `ledger_bank_webhook` outside a req
 omnibank's optional `RegisterWebhook`, and keeps the secret the provider answers in omnibase's
 settings, sealed by its `#[Vault]`: `api.webhook.ledger_bank_webhook.<gateway>.secret` (with
 `.id`, `.url`). The webhook checks a call with it (`Webhooks::notifier()`: `Registry::create($gateway,
-['webhook_secret' => ...])`); a configured `webhook_secret` wins. Idempotent, exit 0 always; on an
+['webhook_secret' => ...])`); a configured `webhook_secret` wins. The secret needs the
+environment's vault key pair (`php bin/console secrets:generate-keys --env=prod`, or
+`SYMFONY_DECRYPTION_SECRET` on the server); two runs at once take turns over the site's lock store
+(`LOCK_DSN`). Idempotent, exit 0 always; on an
 address no provider reaches (`localhost`, `*.local`, `*.test`, a private IP, HTTP) it registers
 nothing and says that `ledger:bank:sync` covers it. **No aggregator supports it today**: Powens
 documents no API for it (its configuration routes take a console-only token) and Bridge sets
