@@ -3,6 +3,9 @@
 ## [Unreleased]
 
 ### Added
+- A party may be a customer (`PartyKind::CUSTOMER`, its account under 411): a client the book's
+  company invoices outside any lease - for omnibase/estate's `transaction` activity, the seller or
+  the buyer who owes the agency's fee. `docs/concepts.md`.
 - The owners' money a property manager holds, for omnibase/estate's `management` activity: a
   bank account may be the escrow account (`BankAccount::$escrow`, an `escrow` column, false by
   default; « Compte séquestre » on its screen; `BankAccountRepository::escrowFor()`), and a party
