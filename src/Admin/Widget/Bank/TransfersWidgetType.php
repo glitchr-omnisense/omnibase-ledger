@@ -13,6 +13,7 @@ use Base\Ledger\Bank\Dashboard;
 final class TransfersWidgetType extends AbstractBankWidgetType
 {
     protected const CASH = true;
+    protected const COMPACT = true;
 
     public static function getName(): string
     {

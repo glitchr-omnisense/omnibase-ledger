@@ -12,6 +12,7 @@ use Base\Ledger\Admin\Widget\Chart;
  */
 final class BalanceWidgetType extends AbstractBankWidgetType
 {
+    protected const COMPACT = true;
     protected const PERIOD = '1m';
 
     public static function getName(): string

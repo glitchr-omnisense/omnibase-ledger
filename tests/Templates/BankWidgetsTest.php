@@ -70,7 +70,11 @@ class BankWidgetsTest extends InMemoryDashboard
         self::assertMatchesRegularExpression('/data-widget-param="accounts" value="1" checked/', $html);
         self::assertStringContainsString('· 1 compte', $html, 'a pick says how many accounts');
         self::assertSame(1, substr_count($html, '<style>'), 'the style once');
+        self::assertStringContainsString('<h2 class="dash-card-title">Statistiques générales</h2>', $html, 'omnibase/admin\'s dashboard card: the title above the panel');
+        self::assertStringContainsString('class="dash-card-panel"', $html);
+        self::assertStringNotContainsString('uppercase', $html, 'no small capitals for labels');
 
+        self::assertStringContainsString('dash-card--compact', $this->render(Bank\TransfersWidgetType::class), 'a compact card, two to a row on a phone');
         $second = $this->render(Bank\KindsWidgetType::class);
         self::assertStringNotContainsString('<style>', $second, 'not twice in a page');
     }

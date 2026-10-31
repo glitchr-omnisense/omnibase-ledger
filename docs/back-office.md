@@ -145,6 +145,13 @@ yield MenuItem::block('ledger_bank_balance', 'Solde agrégé', 'fa-solid fa-sack
 yield MenuItem::block('ledger_bank_statistics', 'Statistiques générales', 'fa-solid fa-chart-column')->setSize(4)->setParams(['period' => '12m']);
 ```
 
+Each card is omnibase/admin's dashboard card (`.dash-card`): its title above the white panel with
+what it covers and its actions, tinted rows that alternate, labels in the text face (no small
+capitals). The balance, the transfers and the reconciliation are compact cards: two to a row on a
+phone. `ledger_books` shows the fiscal year as rows (income, expenses, result, receivables,
+payables, cash), each opening its report, the statements as actions beside its title; `ledger_bank`
+the accounts as rows; their words are in the `ledger` domain (`dashboard.bank.*`, `dashboard.books.*`).
+
 Amounts, numbers and months print in the page's language - the translator's locale, the one the
 labels are in (`LedgerExtension`), whatever intl's default. The statistics' bars stop at the largest
 of the others when one or two buckets tower over them (more than 2.2 times the next,

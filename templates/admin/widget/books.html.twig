@@ -1,48 +1,40 @@
-{# Base\Ledger\Admin\Widget\BooksWidgetType: each book's fiscal year to date,
-   each tile opening its report (income, expenses and result: the income
-   statement), and links to its statements. #}
+{# Base\Ledger\Admin\Widget\BooksWidgetType: each book's fiscal year to date as rows - income,
+   expenses, result, what is owed and what is to pay, cash - each opening its report, and the
+   book's statements a click away. omnibase/admin's dashboard card. #}
 {% if books is not empty %}
-<div class="analytics-card card ledger-books">
-    <div class="analytics-card-header">
-        <h2 class="analytics-card-title">{{ widget.label|trans({}, 'admin') }}</h2>
-    </div>
-    {% for row in books %}
-    {% set book = row.book %}
-    {% set period = {book: book.id, from: row.from|date('Y-m-d'), to: row.to|date('Y-m-d')} %}
-    <div class="ledger-books-book">
-        <div class="ledger-books-title">
-            <strong>{{ book.name }}</strong> <span>exercice {{ row.year }}, au {{ row.to|date('d/m/Y') }}</span>
-            <nav class="ledger-books-links">
-                <a href="{{ path('ledger_admin_income_statement', period) }}"><i class="fa-solid fa-chart-line"></i> Compte de résultat</a>
-                <a href="{{ path('ledger_admin_balance_sheet', {book: book.id, at: row.to|date('Y-m-d')}) }}"><i class="fa-solid fa-building-columns"></i> Bilan</a>
-                <a href="{{ path('ledger_admin_trial_balance', period) }}"><i class="fa-solid fa-scale-balanced"></i> Balance</a>
-            </nav>
+<div class="ledger-books-stack">
+{% for row in books %}
+{% set book = row.book %}
+{% set period = {book: book.id, from: row.from|date('Y-m-d'), to: row.to|date('Y-m-d')} %}
+<section class="dash-card ledger-books">
+    <header class="dash-card-head">
+        <div class="dash-card-titles">
+            <h2 class="dash-card-title">{{ widget.label|trans({}, 'admin') }}{% if books|length > 1 %} · {{ book.name }}{% endif %}</h2>
+            <span class="dash-card-sub">{{ 'dashboard.books.year'|trans({year: row.year, date: row.to|date('d/m/Y')}, 'ledger') }}</span>
         </div>
-        <div class="ledger-books-tiles">
-            <a class="ledger-books-tile" href="{{ path('ledger_admin_income_statement', period) }}"><strong>{{ row.income|ledger_money(book.currency) }}</strong><span>Produits (7)</span></a>
-            <a class="ledger-books-tile" href="{{ path('ledger_admin_income_statement', period) }}"><strong>{{ row.expenses|ledger_money(book.currency) }}</strong><span>Charges (6)</span></a>
-            <a class="ledger-books-tile {{ row.result >= 0 ? 'is-good' : 'is-bad' }}" href="{{ path('ledger_admin_income_statement', period) }}"><strong>{{ row.result|ledger_money(book.currency) }}</strong><span>Résultat</span></a>
-            <a class="ledger-books-tile{{ row.receivables > 0 ? ' is-waiting' }}" href="{{ path('ledger_admin_open_items', {book: book.id, account: '411'}) }}"><strong>{{ row.receivables|ledger_money(book.currency) }}</strong><span>À encaisser (411)</span></a>
-            <a class="ledger-books-tile" href="{{ path('ledger_admin_open_items', {book: book.id, account: '401'}) }}"><strong>{{ row.payables|ledger_money(book.currency) }}</strong><span>À payer (401)</span></a>
-            <a class="ledger-books-tile" href="{{ path('ledger_admin_general_ledger', {book: book.id, account: '512', year: row.yearEnd}) }}"><strong>{{ row.cash|ledger_money(book.currency) }}</strong><span>Trésorerie (512)</span></a>
-        </div>
+        <span class="dash-card-actions">
+            <a class="dash-card-action" href="{{ path('ledger_admin_income_statement', period) }}" title="{{ 'report.income_statement'|trans({}, 'ledger') }}"><i class="fa-solid fa-chart-line"></i></a>
+            <a class="dash-card-action" href="{{ path('ledger_admin_balance_sheet', {book: book.id, at: row.to|date('Y-m-d')}) }}" title="{{ 'report.balance_sheet'|trans({}, 'ledger') }}"><i class="fa-solid fa-building-columns"></i></a>
+            <a class="dash-card-action" href="{{ path('ledger_admin_trial_balance', period) }}" title="{{ 'report.trial_balance'|trans({}, 'ledger') }}"><i class="fa-solid fa-scale-balanced"></i></a>
+        </span>
+    </header>
+    <div class="dash-card-panel">
+        <ul class="dash-rows ledger-books-rows">
+            <li><a class="dash-row" href="{{ path('ledger_admin_income_statement', period) }}"><span class="dash-row-label">{{ 'dashboard.books.income'|trans({}, 'ledger') }}</span><i class="fa-solid fa-chart-line dash-row-icon" aria-hidden="true"></i><span class="dash-row-value">{{ row.income|ledger_money(book.currency) }}</span></a></li>
+            <li><a class="dash-row" href="{{ path('ledger_admin_income_statement', period) }}"><span class="dash-row-label">{{ 'dashboard.books.expenses'|trans({}, 'ledger') }}</span><i class="fa-solid fa-chart-line dash-row-icon" aria-hidden="true"></i><span class="dash-row-value">{{ row.expenses|ledger_money(book.currency) }}</span></a></li>
+            <li><a class="dash-row" href="{{ path('ledger_admin_income_statement', period) }}"><span class="dash-row-label">{{ 'dashboard.books.result'|trans({}, 'ledger') }}</span><i class="fa-solid fa-chart-line dash-row-icon" aria-hidden="true"></i><span class="dash-row-value {{ row.result >= 0 ? 'is-good' : 'is-bad' }}">{{ row.result|ledger_money(book.currency) }}</span></a></li>
+            <li><a class="dash-row" href="{{ path('ledger_admin_open_items', {book: book.id, account: '411'}) }}"><span class="dash-row-label">{{ 'dashboard.books.receivables'|trans({}, 'ledger') }}</span><i class="fa-solid fa-list-check dash-row-icon" aria-hidden="true"></i><span class="dash-row-value">{{ row.receivables|ledger_money(book.currency) }}</span></a></li>
+            <li><a class="dash-row" href="{{ path('ledger_admin_open_items', {book: book.id, account: '401'}) }}"><span class="dash-row-label">{{ 'dashboard.books.payables'|trans({}, 'ledger') }}</span><i class="fa-solid fa-list-check dash-row-icon" aria-hidden="true"></i><span class="dash-row-value">{{ row.payables|ledger_money(book.currency) }}</span></a></li>
+            <li><a class="dash-row" href="{{ path('ledger_admin_general_ledger', {book: book.id, account: '512', year: row.yearEnd}) }}"><span class="dash-row-label">{{ 'dashboard.books.cash'|trans({}, 'ledger') }}</span><i class="fa-solid fa-chart-line dash-row-icon" aria-hidden="true"></i><span class="dash-row-value">{{ row.cash|ledger_money(book.currency) }}</span></a></li>
+        </ul>
     </div>
-    {% endfor %}
+</section>
+{% endfor %}
 </div>
 <style>
-    .ledger-books-book { padding: 0 1rem 1rem; display: grid; gap: .5rem; }
-    .ledger-books-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: .25rem .5rem; }
-    .ledger-books-title span { font-size: .8rem; opacity: .7; }
-    .ledger-books-links { display: flex; gap: .75rem; margin-left: auto; font-size: .8rem; }
-    .ledger-books-links a { color: inherit; opacity: .75; text-decoration: none; }
-    .ledger-books-links a:hover { opacity: 1; text-decoration: underline; }
-    .ledger-books-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: .6rem; }
-    .ledger-books-tile { display: grid; gap: .2rem; padding: .8rem .9rem; border-radius: .75rem; background: rgba(127, 127, 127, .08); color: inherit; text-decoration: none; }
-    .ledger-books-tile strong { font-size: 1.25rem; line-height: 1.15; font-variant-numeric: tabular-nums; }
-    .ledger-books-tile span { font-size: .78rem; opacity: .75; }
-    .ledger-books-tile:hover { background: rgba(127, 127, 127, .16); }
-    .ledger-books-tile.is-good strong { color: #1f8a4c; }
-    .ledger-books-tile.is-bad strong { color: #c0392b; }
-    .ledger-books-tile.is-waiting { background: rgba(255, 179, 0, .14); }
+    .ledger-books-stack { display: flex; flex-direction: column; gap: 1.25rem; flex: 1 1 auto; min-width: 0; }
+    .ledger-books-rows .dash-row { grid-template-columns: minmax(0, 1fr) auto minmax(6.5rem, auto); }
+    .ledger-books-rows .dash-row-value.is-good { color: var(--admin-success); }
+    .ledger-books-rows .dash-row-value.is-bad { color: var(--admin-danger); }
 </style>
 {% endif %}

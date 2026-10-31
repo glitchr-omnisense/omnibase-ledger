@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Changed
+- The bank cards, `ledger_bank` and `ledger_books` take omnibase/admin's dashboard card: the title above
+  the white panel, tinted rows that alternate, labels in the text face instead of small capitals
+  ("Crédit", "Net", "Ont le plus versé", "Aujourd'hui", "Prochaines échéances", "Reçus", "Émis").
+  The balance, the transfers and the reconciliation are compact (two to a row on a phone).
+  `ledger_books` gives the fiscal year as rows with their report a click away; `ledger_bank` its
+  accounts as rows; their words are translated (`dashboard.bank.*`, `dashboard.books.*`), no longer
+  written in French in the templates.
+
 ### Added
 - The opening entry (`Bank\Opening`): the bank's balance less the lines imported, the day before the
   first line, on the bank account against 890 (Bilan d'ouverture) in AN, once per account

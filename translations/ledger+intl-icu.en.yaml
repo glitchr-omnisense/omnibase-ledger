@@ -221,3 +221,21 @@ dashboard:
     rule: "Behind: {api} days without a sync, {files} days without a statement."
   movements:
     nothing: "No line in the period."
+  bank:
+    connect: "Connect a bank ({gateway})"
+    no_gateway: "Configure an Omnibank gateway (omnibank.gateways) to connect a bank."
+    synced: "synced {date}"
+    at_bank: "bank {amount}"
+    renew: "Renew"
+    connected: "Connected"
+    statements: "Statements"
+    to_reconcile: "{count} to reconcile"
+    latest: "Latest lines"
+  books:
+    year: "fiscal year {year}, to {date}"
+    income: "Income (7)"
+    expenses: "Expenses (6)"
+    result: "Result"
+    receivables: "To collect (411)"
+    payables: "To pay (401)"
+    cash: "Cash (512)"

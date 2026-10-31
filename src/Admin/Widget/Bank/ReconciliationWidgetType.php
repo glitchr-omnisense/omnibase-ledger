@@ -11,6 +11,8 @@ use Base\Ledger\Admin\Widget\Chart;
  */
 final class ReconciliationWidgetType extends AbstractBankWidgetType
 {
+    protected const COMPACT = true;
+
     public static function getName(): string
     {
         return 'ledger_bank_reconciliation';

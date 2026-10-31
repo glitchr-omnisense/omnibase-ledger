@@ -221,3 +221,21 @@ dashboard:
     rule: "En retard : {api} jours sans synchronisation, {files} jours sans relevé."
   movements:
     nothing: "Aucune opération sur la période."
+  bank:
+    connect: "Connecter une banque ({gateway})"
+    no_gateway: "Configurez une passerelle Omnibank (omnibank.gateways) pour relier une banque."
+    synced: "synchro {date}"
+    at_bank: "banque {amount}"
+    renew: "Renouveler"
+    connected: "Connectée"
+    statements: "Relevés"
+    to_reconcile: "{count} à rapprocher"
+    latest: "Dernières opérations"
+  books:
+    year: "exercice {year}, au {date}"
+    income: "Produits (7)"
+    expenses: "Charges (6)"
+    result: "Résultat"
+    receivables: "À encaisser (411)"
+    payables: "À payer (401)"
+    cash: "Trésorerie (512)"

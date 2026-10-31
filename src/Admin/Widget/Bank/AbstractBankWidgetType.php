@@ -36,6 +36,9 @@ abstract class AbstractBankWidgetType implements PaletteDashboardWidgetTypeInter
      */
     protected const CASH = false;
 
+    /** A small card - one figure and its context -, two to a row on a phone (admin's .dash-card--compact). */
+    protected const COMPACT = false;
+
     public function __construct(
         protected readonly Dashboard $dashboard,
         private readonly ?AuthorizationCheckerInterface $authorization = null,
@@ -80,7 +83,7 @@ abstract class AbstractBankWidgetType implements PaletteDashboardWidgetTypeInter
     {
         $params = $widget->getParams();
         $books = $this->dashboard->books();
-        $vars = ['allowed' => [] !== $books, 'card' => $this->template(), 'periods' => null === static::PERIOD ? [] : array_keys(Dashboard::PERIODS), 'period' => null, 'accounts' => [], 'allAccounts' => [], 'picked' => [], 'currency' => 'EUR', 'book' => $books[0] ?? null, 'can_manage' => false];
+        $vars = ['allowed' => [] !== $books, 'card' => $this->template(), 'compact' => static::COMPACT, 'periods' => null === static::PERIOD ? [] : array_keys(Dashboard::PERIODS), 'period' => null, 'accounts' => [], 'allAccounts' => [], 'picked' => [], 'currency' => 'EUR', 'book' => $books[0] ?? null, 'can_manage' => false];
         if (!$vars['allowed']) {
             return $vars;
         }

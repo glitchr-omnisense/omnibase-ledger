@@ -1,19 +1,24 @@
-{# The frame every bank card shares (Base\Ledger\Admin\Widget\Bank\AbstractBankWidgetType):
-   its title and what it covers, the ⋮ settings the layout editor opens
-   (period, accounts - omnibase/admin's generic [data-widget-settings-*]),
-   then the card's own body. The style is written once per page. #}
+{# The frame every bank card shares (Base\Ledger\Admin\Widget\Bank\AbstractBankWidgetType),
+   omnibase/admin's dashboard card: the title above the card, with what it
+   covers, its actions and the ⋮ settings the layout editor opens (period,
+   accounts - admin's generic [data-widget-settings-*]); then the white panel
+   with the card's own body. A compact card sits two to a row on a phone.
+   The style is written once per page. #}
 {% if allowed %}
-<div class="analytics-card {{ (embedded is not defined or not embedded) ? 'card' }} ld-card ld-card-{{ card }}" data-ledger-card="{{ card }}">
-    <div class="analytics-card-header ld-head">
-        <div class="ld-titles">
-            <h2 class="analytics-card-title">{{ widget.label|trans({}, 'admin') }}</h2>
-            <span class="ld-sub">
+<section class="dash-card ld-card ld-card-{{ card }}{{ compact ? ' dash-card--compact' }}" data-ledger-card="{{ card }}">
+    <header class="dash-card-head">
+        <div class="dash-card-titles">
+            <h2 class="dash-card-title">{{ widget.label|trans({}, 'admin') }}</h2>
+            <span class="dash-card-sub">
                 {%- block subtitle %}{% if period %}{{ ('dashboard.period.' ~ period.key)|trans({}, 'ledger') }}{% endif %}{% endblock -%}
                 {%- if picked is not empty %} · {{ 'dashboard.accounts_count'|trans({count: accounts|length}, 'ledger') }}{% endif -%}
             </span>
         </div>
-        <button type="button" class="item-settings" data-widget-settings-toggle title="{{ 'dashboard.settings'|trans({}, 'ledger') }}" aria-label="{{ 'dashboard.settings'|trans({}, 'ledger') }}"><i class="fa-solid fa-ellipsis-vertical"></i></button>
-    </div>
+        <span class="dash-card-actions">
+            {%- block actions %}{% endblock -%}
+            <button type="button" class="item-settings dash-card-action" data-widget-settings-toggle title="{{ 'dashboard.settings'|trans({}, 'ledger') }}" aria-label="{{ 'dashboard.settings'|trans({}, 'ledger') }}"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+        </span>
+    </header>
     <div class="widget-settings-panel" data-widget-settings-panel hidden>
         {% if periods is not empty %}
         <label class="widget-settings-field">
@@ -37,11 +42,13 @@
             <button type="button" class="analytics-range-btn is-active" data-widget-settings-apply>{{ 'dashboard.apply'|trans({}, 'ledger') }}</button>
         </div>
     </div>
-    {% if accounts is empty %}
-        <p class="ld-empty">{{ 'dashboard.no_account'|trans({}, 'ledger') }}</p>
-    {% else %}
-        {% block body %}{% endblock %}
-    {% endif %}
-</div>
+    <div class="dash-card-panel">
+        {% if accounts is empty %}
+            <p class="dash-empty">{{ 'dashboard.no_account'|trans({}, 'ledger') }}</p>
+        {% else %}
+            {% block body %}{% endblock %}
+        {% endif %}
+    </div>
+</section>
 {% if ledger_once('ledger-dashboard-style') %}{{ include('@Ledger/admin/widget/bank/_style.html.twig') }}{% endif %}
 {% endif %}
