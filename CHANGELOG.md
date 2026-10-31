@@ -64,6 +64,8 @@
 - Twig: `ledger_compact`, `ledger_month`, `ledger_once()`.
 
 ### Fixed
+- The dashboard's « Comptabilité » rows share the card's height when the card beside it is
+  taller, instead of leaving it empty under « Trésorerie ».
 - A bank line no longer settles an open item dated more than `reconciliation.max_advance_days`
   (new, 45 by default) after it: on meyers, a rent notice for November 2026 was auto-reconciled
   with a tenant's transfer of October 2025 of the same amount, still to reconcile in the history.

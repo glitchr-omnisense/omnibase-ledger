@@ -33,6 +33,10 @@
 </div>
 <style>
     .ledger-books-stack { display: flex; flex-direction: column; gap: 1.25rem; flex: 1 1 auto; min-width: 0; }
+    {# The card stretches to its row's height (the payments beside it are taller): the rows share
+       that height instead of leaving it empty under the last one. #}
+    .ledger-books, .ledger-books .dash-card-panel { flex: 1 1 auto; display: flex; flex-direction: column; }
+    .ledger-books-rows { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: space-between; }
     .ledger-books-rows .dash-row { grid-template-columns: minmax(0, 1fr) auto minmax(6.5rem, auto); }
     .ledger-books-rows .dash-row-value.is-good { color: var(--admin-success); }
     .ledger-books-rows .dash-row-value.is-bad { color: var(--admin-danger); }
