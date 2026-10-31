@@ -27,6 +27,8 @@ class LedgerConfiguration implements ConfigurationInterface
                             ->info('A bank line is reconciled on its own only when exactly one suggestion scores at least this much.')->end()
                         ->integerNode('max_group_items')->min(2)->max(20)->defaultValue(12)
                             ->info('How many open items of one party a grouped payment is looked for among (subset sum, oldest first).')->end()
+                        ->integerNode('max_advance_days')->min(0)->defaultValue(45)
+                            ->info('How many days before an open item\'s date a bank line may settle it (a rent paid ahead): a line older than that is never offered it.')->end()
                     ->end()
                 ->end()
                 ->arrayNode('bank')->addDefaultsIfNotSet()

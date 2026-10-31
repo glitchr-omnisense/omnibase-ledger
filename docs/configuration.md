@@ -31,6 +31,9 @@ ledger:
 
         # How many open items of one party a grouped payment is looked for among (subset sum, oldest first).
         max_group_items:      12
+
+        # How many days before an open item's date a bank line may settle it (a rent paid ahead): a line older than that is never offered it.
+        max_advance_days:     45
     bank:
 
         # A sync asks again for the days before the last one: banks book late. Lines already imported are matched on their id.
@@ -45,6 +48,7 @@ ledger:
 | `secret` | string | `%kernel.secret%` | `StateCipher` | what the bank state's key is derived from; must not be empty |
 | `reconciliation.auto_threshold` | float, 0 to 1 | `0.9` | `Reconciler` | the score a lone suggestion needs to be applied on its own |
 | `reconciliation.max_group_items` | int, 2 to 20 | `12` | `Matcher` | the open items a grouped payment is searched among |
+| `reconciliation.max_advance_days` | int, 0 or more | `45` | `Matcher` | how long before an open item's date a bank line may settle it |
 | `bank.sync_overlap_days` | int, 0 or more | `5` | `Sync` | the days asked again before the last sync |
 
 ## Parameters
@@ -52,7 +56,7 @@ ledger:
 `LedgerExtension` sets one parameter per key and per level (the core's
 `AbstractBaseExtension::setConfiguration()`): `ledger.auto_accounts`, `ledger.chart`,
 `ledger.admin_role`, `ledger.secret`, `ledger.reconciliation` (the array),
-`ledger.reconciliation.auto_threshold`, `ledger.reconciliation.max_group_items`, `ledger.bank`,
+`ledger.reconciliation.auto_threshold`, `ledger.reconciliation.max_group_items`, `ledger.reconciliation.max_advance_days`, `ledger.bank`,
 `ledger.bank.sync_overlap_days`. The services read them with `#[Autowire('%ledger.…%')]`.
 
 ## Services
@@ -81,7 +85,7 @@ Autoconfiguration the bundle relies on:
 | `LedgerVoter` | a `Voter` |
 
 Optional collaborators: `Symfony\Component\Lock\LockFactory` (`Posting`, numbering under a
-lock), `EventDispatcherInterface` (`Reconciler`, the `BankLineReconciled` event).
+lock), `EventDispatcherInterface` (`Reconciler`, the `BankLineReconciled` and `BankLineUnreconciled` events).
 
 `ledger.bank.opening_account` (`890`) and `ledger.bank.opening_journal` (`AN`): the account and the
 journal a bank account's opening entry is posted against and in ([Bank feeds](usage-bank.md#the-opening-entry)),

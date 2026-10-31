@@ -69,6 +69,8 @@ cards' shared style, written once).
 `Base\Ledger\Event\BankLineReconciled` (dispatched by its class name, after
 `Reconciler::apply()`): `line`, `entry`, `openItems`
 ([Reconciliation](usage-reconciliation.md#following-a-reconciliation)).
+`Base\Ledger\Event\BankLineUnreconciled` (after `Reconciler::undo()` of a reconciled line):
+`line`, `entry`, `reversal`.
 
 ## Templates
 

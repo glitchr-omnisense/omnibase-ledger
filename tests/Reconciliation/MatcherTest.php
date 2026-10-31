@@ -59,6 +59,22 @@ class MatcherTest extends InMemoryLedger
         self::assertCount(1, self::sure($suggestions));
     }
 
+    public function testALineNeverSettlesANoticeIssuedLongAfterIt(): void
+    {
+        $muller = $this->party('Léa Muller', reference: 'U2', iban: self::DUPONT_IBAN);
+        $november = $this->notice($muller, 101000, 'AVIS-2026-11-U2', '2026-11-01');
+
+        // A year-old transfer of the same amount, still to reconcile when the notice is issued:
+        // her IBAN is known (a payment on account, someone decides), the notice is not offered.
+        $suggestions = $this->matcher()->suggest($this->bankLine(101000, 'VIR SEPA MULLER LEA LOYER', iban: self::DUPONT_IBAN, date: '2025-10-04'));
+        self::assertSame([[]], array_map(fn ($suggestion) => $suggestion->openItems, $suggestions));
+        self::assertSame(Matcher::IBAN_ONLY, $suggestions[0]->score);
+
+        // Paid a few days ahead, it still is.
+        $suggestions = $this->matcher()->suggest($this->bankLine(101000, 'VIR SEPA MULLER LEA LOYER', iban: self::DUPONT_IBAN, date: '2026-10-28'));
+        self::assertSame([$november], $suggestions[0]->openItems);
+    }
+
     public function testTheOldestOfSeveralEqualItemsOfTheSameParty(): void
     {
         $dupont = $this->party('Jean Dupont', reference: 'U3', iban: self::DUPONT_IBAN);

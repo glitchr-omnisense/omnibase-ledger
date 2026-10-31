@@ -10,6 +10,7 @@ use Base\Ledger\Entity\EntryLine;
 use Base\Ledger\Entity\Party;
 use Base\Ledger\Entity\ReconciliationRule;
 use Base\Ledger\Event\BankLineReconciled;
+use Base\Ledger\Event\BankLineUnreconciled;
 use Base\Ledger\Enum\BankLineStatus;
 use Base\Ledger\Exception\LedgerException;
 use Base\Ledger\Exception\ReconciliationException;
@@ -167,7 +168,8 @@ class Reconciler
     /**
      * Back to unmatched: an ignored line simply, a reconciled one by
      * reversing its entry (dated as it was) and unlettering what it settled
-     * - refused when that date is in the locked period.
+     * (BankLineUnreconciled, for what followed the reconciliation) - refused
+     * when that date is in the locked period.
      */
     public function undo(BankLine $line): void
     {
@@ -219,6 +221,8 @@ class Reconciler
 
         $line->setEntry(null)->setStatus(BankLineStatus::UNMATCHED);
         $this->entityManager->flush();
+
+        $this->dispatcher?->dispatch(new BankLineUnreconciled($line, $entry, $reversal));
     }
 
     /**

@@ -12,7 +12,9 @@ what it settles. `Base\Ledger\Reconciliation\Matcher` says what a line may settl
 ## The open items
 
 `Matcher::openItems(Book $book)` is what a bank line can settle: the unlettered lines of the
-third-party accounts (class 4) and of the clearing accounts (`511`).
+third-party accounts (class 4) and of the clearing accounts (`511`). `suggest()` keeps those dated
+at most `reconciliation.max_advance_days` (45) after the line: a rent paid a little ahead is
+found, an old transfer of the same amount never settles a notice issued long after it.
 
 ## Suggestions
 
@@ -98,7 +100,8 @@ the reconciliation page's button.
   and its reversal lettered together on the class 4 and 511 accounts so that neither is an
   open item, and the line is `UNMATCHED` again. Refused when the entry's date is in the
   locked period or a closed fiscal year. The next reconciliation posts with the source
-  `bank:<id>/2`.
+  `bank:<id>/2`. A reconciled line taken back dispatches `BankLineUnreconciled` (`line`,
+  `entry`, `reversal`), for what followed `BankLineReconciled` to be undone.
 
 ## Rules and splits
 
@@ -151,4 +154,6 @@ final class RentPaid
 ```
 
 `$event->line`, `$event->entry` (the bank entry) and `$event->openItems` (the items it settled;
-empty for a partial payment, a rule or a payment on account).
+empty for a partial payment, a rule or a payment on account). Its counterpart,
+`BankLineUnreconciled`, comes when the line is taken back (`undo()`): what the listener did from
+the line (a payment recorded under the line's id) is undone.

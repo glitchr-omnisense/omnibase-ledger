@@ -128,7 +128,12 @@ class ReconcilerTest extends InMemoryLedger
         $dupont = $this->party('Jean Dupont', reference: 'U3');
         $notice = $this->notice($dupont, 85000, 'AVIS-U3');
         $line = $this->bankLine(85000, 'VIR SEPA AVIS-U3');
-        $reconciler = $this->reconciler();
+        $events = [];
+        $dispatcher = new \Symfony\Component\EventDispatcher\EventDispatcher();
+        $dispatcher->addListener(\Base\Ledger\Event\BankLineUnreconciled::class, function (\Base\Ledger\Event\BankLineUnreconciled $event) use (&$events): void {
+            $events[] = $event;
+        });
+        $reconciler = new \Base\Ledger\Reconciliation\Reconciler($this->entityManager(), $this->posting(), $this->lettering(), $this->matcher(), $this->bankLineRepository(), 0.9, $dispatcher);
         $entry = $reconciler->apply($line, $this->matcher()->suggest($line)[0]);
 
         $reconciler->undo($line);
@@ -143,6 +148,9 @@ class ReconcilerTest extends InMemoryLedger
         self::assertNotNull($entry->getLines()->last()->getLetter());
         self::assertSame($entry->getLines()->last()->getLetter(), $reversal->getLines()->last()->getLetter());
         self::assertSame([$notice], $this->lettering()->openItems($this->book, $dupont));
+        // What followed the reconciliation (a rent call paid) hears of it.
+        self::assertCount(1, $events);
+        self::assertSame([$line, $entry, $reversal], [$events[0]->line, $events[0]->entry, $events[0]->reversal]);
 
         // Applied again, it is a new entry.
         $again = $reconciler->apply($line, $this->matcher()->suggest($line)[0]);

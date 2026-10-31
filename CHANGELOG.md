@@ -46,6 +46,12 @@
 - Twig: `ledger_compact`, `ledger_month`, `ledger_once()`.
 
 ### Fixed
+- A bank line no longer settles an open item dated more than `reconciliation.max_advance_days`
+  (new, 45 by default) after it: on meyers, a rent notice for November 2026 was auto-reconciled
+  with a tenant's transfer of October 2025 of the same amount, still to reconcile in the history.
+- `Reconciler::undo()` of a reconciled line dispatches `BankLineUnreconciled` (`line`, `entry`,
+  `reversal`): what followed `BankLineReconciled` (omnibase/estate's rent call paid) can be undone
+  - it stayed paid.
 - The `ledger_bank` card no longer overflows a phone's width (its latest lines' table).
 - The bank widget offers to connect a bank (each Omnibank gateway) and to import a statement under
   the accounts too, not only before the first one: a book with an account already (a statement

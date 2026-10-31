@@ -30,6 +30,10 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
  * 5. a reconciliation rule (0.9), with the open items of its account when
  *    they add up (0.92: a Stripe payout against the 5112 clearing account).
  *
+ * Only the open items a line can have paid are looked at: none dated more
+ * than max_advance_days (45) after the line - an old transfer of the same
+ * amount never settles a notice issued a year later.
+ *
  * The same amount owed by two parties, nothing else to tell them apart,
  * scores 0.5 each; two parties recognised by the same IBAN or name, 0.6.
  * Under the auto threshold (0.9), someone decides.
@@ -62,6 +66,7 @@ class Matcher
         private readonly PartyRepository $parties,
         private readonly ReconciliationRuleRepository $rules,
         #[Autowire('%ledger.reconciliation.max_group_items%')] private readonly int $maxGroupItems = 12,
+        #[Autowire('%ledger.reconciliation.max_advance_days%')] private readonly int $maxAdvanceDays = 45,
     ) {
     }
 
@@ -88,7 +93,8 @@ class Matcher
             return [];
         }
         $book = $line->getBook();
-        $items = array_values(array_filter($openItems ?? $this->openItems($book), fn (EntryLine $item) => !$item->isLettered()));
+        $latest = $line->getBookedOn()->modify(sprintf('+%d days', $this->maxAdvanceDays));
+        $items = array_values(array_filter($openItems ?? $this->openItems($book), fn (EntryLine $item) => !$item->isLettered() && $item->getEntry()->getDate() <= $latest));
         $text = Text::fold($line->getLabel().' '.$line->getReference().' '.$line->getCounterpartyName());
         $squashed = str_replace(' ', '', $text);
 
