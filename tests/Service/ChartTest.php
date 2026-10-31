@@ -5,6 +5,8 @@ namespace Tests\Base\Ledger\Service;
 use Base\Ledger\Entity\Account;
 use Base\Ledger\Entity\Book;
 use Base\Ledger\Entity\Journal;
+use Base\Ledger\Entity\Tax;
+use Base\Ledger\Enum\TaxKind;
 use Base\Ledger\Enum\AccountType;
 use Base\Ledger\Repository\AccountRepository;
 use Base\Ledger\Repository\JournalRepository;
@@ -61,6 +63,28 @@ class ChartTest extends TestCase
         foreach ($accounts as $number => $account) {
             self::assertSame($account->getType(), AccountType::guess((string) $number), $number.': its type is not the PCG\'s default');
         }
+    }
+
+    public function testTheFrenchVatCodesComeWithTheChart(): void
+    {
+        $book = new Book('SCI');
+        $this->chart()->seed($book);
+
+        $taxes = [];
+        foreach ($this->persisted as $entity) {
+            if ($entity instanceof Tax) {
+                $taxes[$entity->getCode()] = [$entity->getRate(), $entity->getKind(), $entity->getAccount()?->getNumber(), $entity->getDeductibleAccount()?->getNumber()];
+            }
+        }
+
+        self::assertSame([2000, TaxKind::COLLECTED, '44571', null], $taxes['V20']);
+        self::assertSame([1000, TaxKind::COLLECTED, '44571', null], $taxes['V10']);
+        self::assertSame([550, TaxKind::COLLECTED, '44571', null], $taxes['V55']);
+        self::assertSame([210, TaxKind::COLLECTED, '44571', null], $taxes['V21']);
+        self::assertSame([2000, TaxKind::DEDUCTIBLE, '44566', null], $taxes['A20']);
+        self::assertSame([2000, TaxKind::DEDUCTIBLE_ASSETS, '44562', null], $taxes['I20']);
+        self::assertSame([0, TaxKind::EXEMPT, null, null], $taxes['EXO']);
+        self::assertSame([2000, TaxKind::REVERSE_CHARGE, '4452', '44566'], $taxes['AIC20']);
     }
 
     public function testSeedingAgainKeepsWhatTheBookHas(): void

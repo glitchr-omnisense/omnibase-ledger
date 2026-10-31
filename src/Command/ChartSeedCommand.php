@@ -13,7 +13,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
 /** Gives a book the accounts and journals of a chart (config/charts/), keeping what it has. */
-#[AsCommand(name: 'ledger:chart:seed', description: 'Add a chart\'s accounts and journals to a book (the missing ones)')]
+#[AsCommand(name: 'ledger:chart:seed', description: 'Add a chart\'s accounts, journals and VAT codes to a book (the missing ones)')]
 class ChartSeedCommand extends Command
 {
     public function __construct(

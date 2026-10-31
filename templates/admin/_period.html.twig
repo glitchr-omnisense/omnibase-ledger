@@ -2,6 +2,13 @@
     {% if extra is defined %}{{ extra|raw }}{% endif %}
     <label>{{ 'report.from'|trans({}, 'ledger') }}<input class="form-control" type="date" name="from" value="{{ from|date('Y-m-d') }}"></label>
     <label>{{ 'report.to'|trans({}, 'ledger') }}<input class="form-control" type="date" name="to" value="{{ to|date('Y-m-d') }}"></label>
+    {% if axes is defined and axes is not empty %}
+    {% for axis, value in filter|default({}) %}<input type="hidden" name="dimension[{{ axis }}]" value="{{ value }}">{% endfor %}
+    <label>{{ 'report.by'|trans({}, 'ledger') }}<select class="form-control" name="by">
+        <option value="">{{ 'report.by_none'|trans({}, 'ledger') }}</option>
+        {% for axis, count in axes %}<option value="{{ axis }}"{{ (by|default(null)) == axis ? ' selected' }}>{{ include('@Ledger/admin/_axis.html.twig', {axis: axis}) }}</option>{% endfor %}
+    </select></label>
+    {% endif %}
     {% if compare is defined %}<label class="check"><input type="hidden" name="n1" value="0"><input type="checkbox" name="n1" value="1"{{ compare ? ' checked' }}> {{ 'report.compare'|trans({}, 'ledger') }}</label>{% endif %}
     <button class="btn btn-sm btn-secondary" type="submit">{{ 'report.show'|trans({}, 'ledger') }}</button>
 </form>

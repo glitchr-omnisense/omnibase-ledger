@@ -34,7 +34,7 @@ class FiscalYearCrudController extends AbstractCrudController
     public function configureFields(string $pageName): iterable
     {
         yield IdField::new('id')->onlyOnIndex();
-        yield AssociationField::new('book', 'Livre')->setColumns(4)->setDisabled(Crud::PAGE_EDIT === $pageName);
+        yield $this->bookField()->setColumns(4)->setDisabled(Crud::PAGE_EDIT === $pageName);
         yield DateField::new('start', 'Début')->setColumns(4);
         yield DateField::new('end', 'Fin')->setColumns(4);
         yield DateTimeField::new('closedAt', 'Clôturé le')->setRequired(false)->setColumns(4);

@@ -63,6 +63,21 @@ trait LedgerAdminTrait
             ] + ($required ? [] : ['placeholder' => '']));
     }
 
+    /**
+     * A record's book, chosen in the list of books (EntityType):
+     * AssociationType would embed the book's own form, whose VAT regime (an
+     * enum) it cannot render.
+     */
+    protected function bookField(string $label = 'Livre'): AssociationField
+    {
+        return AssociationField::new('book', $label)
+            ->setFormType(EntityType::class)
+            ->setFormTypeOptions([
+                'class' => Book::class,
+                'query_builder' => fn (EntityRepository $repository) => $repository->createQueryBuilder('b')->orderBy('b.name', 'ASC'),
+            ]);
+    }
+
     /** A token in an action's link, as for a logout: a link from elsewhere, a prefetch, does nothing. */
     protected function actionToken(string $action, ?int $id): string
     {

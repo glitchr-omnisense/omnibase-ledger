@@ -2,8 +2,10 @@
 
 namespace Base\Ledger\Controller\Admin;
 
+use Base\Ledger\Dimension\Dimensions;
 use Base\Ledger\Entity\Book;
 use Base\Ledger\Entity\Entry;
+use Base\Ledger\Entity\EntryLineDimension;
 use Base\Ledger\Exception\LedgerException;
 use Base\Ledger\Export\FecWriter;
 use Base\Ledger\Report\BalanceSheet;
@@ -11,6 +13,8 @@ use Base\Ledger\Report\GeneralLedger;
 use Base\Ledger\Report\IncomeStatement;
 use Base\Ledger\Report\OpenItems;
 use Base\Ledger\Report\TrialBalance;
+use Base\Ledger\Report\VatReturn;
+use Base\Ledger\Repository\EntryLineRepository;
 use Base\Ledger\Repository\FiscalYearRepository;
 use Base\Ledger\Security\Voter\LedgerVoter;
 use Base\Ledger\Service\Chart;
@@ -24,7 +28,9 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
  * A book's reports - trial balance, general ledger, open items, income
- * statement and balance sheet (on screen, printed or as CSV), the FEC to
+ * statement, balance sheet and VAT return (on screen, printed or as CSV),
+ * the general ledger and the income statement filtered by analytic
+ * dimensions (?dimension[unit]=12) or per value of an axis (?by=unit), the FEC to
  * download - and its buttons: seeding the chart, validating or reversing an
  * entry.
  */
@@ -32,8 +38,11 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[Route('/admin/ledger')]
 class ReportController extends AbstractLedgerPageController
 {
-    public function __construct(private readonly FiscalYearRepository $fiscalYears)
-    {
+    public function __construct(
+        private readonly FiscalYearRepository $fiscalYears,
+        private readonly EntryLineRepository $lines,
+        private readonly Dimensions $dimensions,
+    ) {
     }
 
     #[Route('/book/{book}/trial-balance', name: 'ledger_admin_trial_balance', requirements: ['book' => '\d+'], methods: ['GET'])]
@@ -51,8 +60,12 @@ class ReportController extends AbstractLedgerPageController
         $ledger = $this->load(Book::class, $book);
         [$from, $to, $year] = $this->period($request, $ledger);
         $prefix = preg_replace('/[^0-9A-Za-z]/', '', (string) $request->query->get('account')) ?: null;
+        [$filter, $by] = $this->dimensionQuery($request);
+        $groups = null === $by
+            ? [['value' => null, 'label' => null, 'accounts' => $generalLedger->compute($ledger, $from, $to, $prefix, $filter)]]
+            : $generalLedger->byDimension($ledger, $from, $to, $by, $prefix, $filter);
 
-        return $this->page('@Ledger/admin/general_ledger.html.twig', ['book' => $ledger, 'from' => $from, 'to' => $to, 'year' => $year, 'prefix' => $prefix, 'accounts' => $generalLedger->compute($ledger, $from, $to, $prefix)]);
+        return $this->page('@Ledger/admin/general_ledger.html.twig', ['book' => $ledger, 'from' => $from, 'to' => $to, 'year' => $year, 'prefix' => $prefix, 'groups' => $groups] + $this->dimensionVars($ledger, $filter, $by));
     }
 
     #[Route('/book/{book}/open-items', name: 'ledger_admin_open_items', requirements: ['book' => '\d+'], methods: ['GET'])]
@@ -71,7 +84,26 @@ class ReportController extends AbstractLedgerPageController
         $ledger = $this->load(Book::class, $book);
         [$from, $to, $year] = $this->period($request, $ledger);
         $compare = $request->query->getBoolean('n1', true);
-        $report = $incomeStatement->compute($ledger, $from, $to, $compare);
+        [$filter, $by] = $this->dimensionQuery($request);
+
+        if (null !== $by) {
+            $grouped = $incomeStatement->byDimension($ledger, $from, $to, $by, $filter);
+            if ('csv' === $request->query->get('format')) {
+                $rows = [];
+                foreach ($grouped['groups'] as $group) {
+                    $rows[] = [$by, $group['value'] ?? '', $group['label'] ?? 'Non affecté', $group['report']['totals']['income'], $group['report']['totals']['expenses'], $group['report']['totals']['result']];
+                }
+                $rows[] = ['', '', 'Total', $grouped['totals']['income'], $grouped['totals']['expenses'], $grouped['totals']['result']];
+
+                return $this->table(sprintf('compte-de-resultat-par-%s-%s-%s.csv', $by, $from->format('Ymd'), $to->format('Ymd')), ['Axe', 'Valeur', 'Libellé', 'Produits', 'Charges', 'Résultat'], $rows, 3);
+            }
+
+            return $this->page('@Ledger/admin/income_statement_by.html.twig', [
+                'book' => $ledger, 'from' => $from, 'to' => $to, 'year' => $year, 'report' => $grouped,
+            ] + $this->dimensionVars($ledger, $filter, $by));
+        }
+
+        $report = $incomeStatement->compute($ledger, $from, $to, $compare, $filter);
 
         if ('csv' === $request->query->get('format')) {
             $rows = [];
@@ -91,7 +123,7 @@ class ReportController extends AbstractLedgerPageController
         return $this->page('@Ledger/admin/income_statement.html.twig', [
             'book' => $ledger, 'from' => $from, 'to' => $to, 'year' => $year, 'compare' => $compare,
             'previous_from' => IncomeStatement::yearBefore($from), 'previous_to' => IncomeStatement::yearBefore($to), 'report' => $report,
-        ]);
+        ] + $this->dimensionVars($ledger, $filter, null));
     }
 
     /** ?at= (Y-m-d), else the fiscal year's end - or today, while it runs; ?n1=0 and ?format=csv as for the income statement. */
@@ -123,6 +155,31 @@ class ReportController extends AbstractLedgerPageController
             'book' => $ledger, 'at' => $at, 'year' => $year, 'compare' => $compare,
             'previous_at' => IncomeStatement::yearBefore($at), 'report' => $report,
         ]);
+    }
+
+    /**
+     * The VAT return over ?from=&to=, else the last period the book's regime
+     * declares (the month or the quarter before, the year before for the
+     * CA12), else the current fiscal year; ?format=csv downloads it.
+     */
+    #[Route('/book/{book}/vat-return', name: 'ledger_admin_vat_return', requirements: ['book' => '\d+'], methods: ['GET'])]
+    public function vatReturn(Request $request, int $book, VatReturn $vatReturn): Response
+    {
+        $ledger = $this->load(Book::class, $book);
+        [$from, $to, $year] = $this->period($request, $ledger);
+        if (!$request->query->has('from') && !$request->query->has('to') && !$request->query->has('year')
+            && null !== ($last = $ledger->getVatRegime()->lastPeriod(new \DateTimeImmutable('today')))) {
+            [$from, $to] = $last;
+        }
+        $report = $vatReturn->compute($ledger, $from, $to);
+
+        if ('csv' === $request->query->get('format')) {
+            $rows = array_map(fn (array $box) => [$box['box'], $box['label'], $box['base'], $box['amount']], $report['boxes']);
+
+            return $this->table(sprintf('tva-%s-%s.csv', $from->format('Ymd'), $to->format('Ymd')), ['Case', 'Libellé', 'Base HT', 'TVA'], $rows, 2);
+        }
+
+        return $this->page('@Ledger/admin/vat_return.html.twig', ['book' => $ledger, 'from' => $from, 'to' => $to, 'year' => $year, 'report' => $report]);
     }
 
     #[Route('/book/{book}/fec/{year}', name: 'ledger_admin_fec', requirements: ['book' => '\d+', 'year' => '\d{4}'], methods: ['GET'])]
@@ -200,6 +257,66 @@ class ReportController extends AbstractLedgerPageController
         $response->headers->set('Content-Disposition', HeaderUtils::makeDisposition(HeaderUtils::DISPOSITION_ATTACHMENT, $filename));
 
         return $response;
+    }
+
+    /**
+     * A spreadsheet of $headers and $rows, as csv() writes it: the columns
+     * from $firstAmount on are amounts.
+     *
+     * @param list<list<int|string|null>> $rows
+     */
+    private function table(string $filename, array $headers, array $rows, int $firstAmount): Response
+    {
+        $out = fopen('php://temp', 'r+');
+        fwrite($out, "\u{FEFF}");
+        fputcsv($out, $headers, ';', '"', '');
+        foreach ($rows as $row) {
+            fputcsv($out, array_map(fn (int|string|null $value, int $i) => $i >= $firstAmount ? (null === $value ? '' : number_format(((int) $value) / 100, 2, ',', '')) : (string) $value, $row, array_keys($row)), ';', '"', '');
+        }
+        rewind($out);
+        $response = new Response(stream_get_contents($out));
+        fclose($out);
+        $response->headers->set('Content-Type', 'text/csv; charset=UTF-8');
+        $response->headers->set('Content-Disposition', HeaderUtils::makeDisposition(HeaderUtils::DISPOSITION_ATTACHMENT, $filename));
+
+        return $response;
+    }
+
+    /**
+     * ?dimension[axis]=value (the lines kept) and ?by=axis (the grouping),
+     * an axis or a value that is not one left out.
+     *
+     * @return array{0: array<string, string>, 1: ?string}
+     */
+    private function dimensionQuery(Request $request): array
+    {
+        $filter = [];
+        foreach ((array) ($request->query->all()['dimension'] ?? []) as $axis => $value) {
+            try {
+                if (\is_scalar($value) && '' !== trim((string) $value)) {
+                    $filter[EntryLineDimension::axis((string) $axis)] = EntryLineDimension::value((string) $value);
+                }
+            } catch (\InvalidArgumentException) {
+            }
+        }
+        try {
+            $by = '' === trim((string) $request->query->get('by')) ? null : EntryLineDimension::axis((string) $request->query->get('by'));
+        } catch (\InvalidArgumentException) {
+            $by = null;
+        }
+
+        return [$filter, $by];
+    }
+
+    /** What the pages show of the axes: the book's, the filter with its labels, the grouping. */
+    private function dimensionVars(Book $book, array $filter, ?string $by): array
+    {
+        $labels = [];
+        foreach ($filter as $axis => $value) {
+            $labels[$axis] = $this->dimensions->label($axis, $value);
+        }
+
+        return ['axes' => $this->lines->axes($book), 'filter' => $filter, 'filter_labels' => $labels, 'by' => $by];
     }
 
     /** @return array{0: \DateTimeImmutable, 1: \DateTimeImmutable, 2: string} ?from=&to= (Y-m-d), ?year=, else the current fiscal year */

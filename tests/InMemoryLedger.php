@@ -13,6 +13,7 @@ use Base\Ledger\Entity\FiscalYear;
 use Base\Ledger\Entity\Journal;
 use Base\Ledger\Entity\Party;
 use Base\Ledger\Entity\ReconciliationRule;
+use Base\Ledger\Entity\Tax;
 use Base\Ledger\Enum\BankLineStatus;
 use Base\Ledger\Enum\PartyKind;
 use Base\Ledger\Reconciliation\Matcher;
@@ -25,6 +26,7 @@ use Base\Ledger\Repository\FiscalYearRepository;
 use Base\Ledger\Repository\JournalRepository;
 use Base\Ledger\Repository\PartyRepository;
 use Base\Ledger\Repository\ReconciliationRuleRepository;
+use Base\Ledger\Repository\TaxRepository;
 use Base\Ledger\Service\Lettering;
 use Base\Ledger\Service\Posting;
 use Doctrine\ORM\EntityManagerInterface;
@@ -53,6 +55,8 @@ abstract class InMemoryLedger extends TestCase
     protected array $bankLines = [];
     /** @var list<FiscalYear> */
     protected array $fiscalYears = [];
+    /** @var array<string, Tax> */
+    protected array $taxes = [];
     protected int $flushes = 0;
     private int $ids = 0;
 
@@ -99,6 +103,34 @@ abstract class InMemoryLedger extends TestCase
             ->line($party->getAccountNumber(), 0, $amount, $party));
 
         return $entry->getLines()->last();
+    }
+
+    /**
+     * The book's French VAT codes, as Chart::seed() gives them (the VAT
+     * accounts added): V20, A20, I20, EXO, AIC20...
+     *
+     * @return array<string, Tax>
+     */
+    protected function frenchTaxes(): array
+    {
+        foreach (['4452' => 'TVA due intracommunautaire', '44562' => 'TVA déductible sur immobilisations', '44566' => 'TVA déductible', '44571' => 'TVA collectée'] as $number => $label) {
+            $this->account((string) $number, $label);
+        }
+        $definition = (require \dirname(__DIR__).'/config/charts/sci.php')['taxes'];
+        foreach ($definition as $code => [$label, $rate, $kind, $account, $deductible]) {
+            $this->taxes[$code] ??= $this->persisted(new Tax($this->book, $code, $label, $rate, $kind, null === $account ? null : $this->accounts[$account], null === $deductible ? null : $this->accounts[$deductible]));
+        }
+
+        return $this->taxes;
+    }
+
+    protected function taxRepository(): TaxRepository
+    {
+        $repository = $this->createStub(TaxRepository::class);
+        $repository->method('findOneByCode')->willReturnCallback(fn (Book $book, string $code) => $this->taxes[Tax::normalize($code)] ?? null);
+        $repository->method('forBook')->willReturnCallback(fn () => array_values($this->taxes));
+
+        return $repository;
     }
 
     private ?BankAccount $bankAccount = null;
@@ -242,22 +274,54 @@ abstract class InMemoryLedger extends TestCase
             return $letters ? end($letters) : null;
         });
         // What the reports read: debit and credit per account over a period, drafts included unless asked.
-        $repository->method('totalsByAccount')->willReturnCallback(function (Book $book, ?\DateTimeImmutable $from = null, ?\DateTimeImmutable $to = null, bool $validatedOnly = false) {
+        $repository->method('totalsByAccount')->willReturnCallback(function (Book $book, ?\DateTimeImmutable $from = null, ?\DateTimeImmutable $to = null, bool $validatedOnly = false, array $dimensions = [], ?string $groupBy = null) {
             $totals = [];
-            foreach ($this->allLines() as $line) {
-                $entry = $line->getEntry();
-                $day = $entry->getDate()->format('Y-m-d');
-                if ((null !== $from && $day < $from->format('Y-m-d')) || (null !== $to && $day > $to->format('Y-m-d')) || ($validatedOnly && !$entry->isValidated())) {
-                    continue;
-                }
+            foreach ($this->linesFor($from, $to, $validatedOnly, $dimensions) as $line) {
                 $account = $line->getAccount();
-                $totals[$account->getNumber()] ??= ['number' => $account->getNumber(), 'label' => $account->getLabel(), 'type' => $account->getType(), 'debit' => 0, 'credit' => 0];
-                $totals[$account->getNumber()]['debit'] += $line->getDebit();
-                $totals[$account->getNumber()]['credit'] += $line->getCredit();
+                $value = null === $groupBy ? null : $line->getDimension($groupBy);
+                $key = $account->getNumber().'|'.$value;
+                $totals[$key] ??= ['number' => $account->getNumber(), 'label' => $account->getLabel(), 'type' => $account->getType(), 'debit' => 0, 'credit' => 0] + (null === $groupBy ? [] : ['dimension' => $value]);
+                $totals[$key]['debit'] += $line->getDebit();
+                $totals[$key]['credit'] += $line->getCredit();
             }
             ksort($totals, \SORT_STRING);
 
             return array_values($totals);
+        });
+        $repository->method('forLedger')->willReturnCallback(function (Book $book, ?\DateTimeImmutable $from = null, ?\DateTimeImmutable $to = null, ?string $prefix = null, array $dimensions = []) {
+            $lines = array_values(array_filter($this->linesFor($from, $to, false, $dimensions), fn (EntryLine $l) => null === $prefix || $l->getAccount()->isUnder($prefix)));
+            usort($lines, fn (EntryLine $a, EntryLine $b) => [$a->getAccount()->getNumber(), $a->getEntry()->getDate(), $a->getId()] <=> [$b->getAccount()->getNumber(), $b->getEntry()->getDate(), $b->getId()]);
+
+            return $lines;
+        });
+        // As the SQL groups them: per tax and account, debit, credit and the bases on each side.
+        $repository->method('taxTotals')->willReturnCallback(function (Book $book, \DateTimeImmutable $from, \DateTimeImmutable $to) {
+            $rows = [];
+            foreach ($this->linesFor($from, $to, false, []) as $line) {
+                if (null === $tax = $line->getTax()) {
+                    continue;
+                }
+                $key = $tax->getCode().'|'.$line->getAccount()->getNumber();
+                $rows[$key] ??= ['code' => $tax->getCode(), 'label' => $tax->getLabel(), 'rate' => $tax->getRate(), 'kind' => $tax->getKind()->value, 'account' => $line->getAccount()->getNumber(),
+                    'tax_account' => $tax->getAccount()?->getNumber(), 'deductible_account' => $tax->getDeductibleAccount()?->getNumber(), 'debit' => 0, 'credit' => 0, 'base_debit' => 0, 'base_credit' => 0];
+                $rows[$key]['debit'] += $line->getDebit();
+                $rows[$key]['credit'] += $line->getCredit();
+                $rows[$key][$line->getDebit() > 0 ? 'base_debit' : 'base_credit'] += (int) $line->getTaxBase();
+            }
+            ksort($rows, \SORT_STRING);
+
+            return array_values($rows);
+        });
+        $repository->method('axes')->willReturnCallback(function () {
+            $axes = [];
+            foreach ($this->allLines() as $line) {
+                foreach ($line->getDimensions() as $axis => $value) {
+                    $axes[$axis][$value] = true;
+                }
+            }
+            ksort($axes);
+
+            return array_map('count', $axes);
         });
 
         return $repository;
@@ -313,7 +377,7 @@ abstract class InMemoryLedger extends TestCase
 
     protected function posting(bool $autoAccounts = false): Posting
     {
-        return new Posting($this->entityManager(), $this->accountRepository(), $this->journalRepository(), $this->entryRepository(), $this->fiscalYearRepository(), $autoAccounts);
+        return new Posting($this->entityManager(), $this->accountRepository(), $this->journalRepository(), $this->entryRepository(), $this->fiscalYearRepository(), $autoAccounts, null, $this->taxRepository());
     }
 
     protected function lettering(): Lettering
@@ -330,7 +394,30 @@ abstract class InMemoryLedger extends TestCase
 
     protected function reconciler(float $threshold = 0.9): Reconciler
     {
-        return new Reconciler($this->entityManager(), $this->posting(), $this->lettering(), $this->matcher(), $this->bankLineRepository(), $threshold);
+        return new Reconciler($this->entityManager(), $this->posting(), $this->lettering(), $this->matcher(), $this->bankLineRepository(), $threshold, null, $this->taxRepository());
+    }
+
+    /**
+     * The lines over a period, maybe validated only, carrying each axis => value of $dimensions.
+     *
+     * @return list<EntryLine>
+     */
+    protected function linesFor(?\DateTimeImmutable $from, ?\DateTimeImmutable $to, bool $validatedOnly, array $dimensions): array
+    {
+        return array_values(array_filter($this->allLines(), function (EntryLine $line) use ($from, $to, $validatedOnly, $dimensions) {
+            $entry = $line->getEntry();
+            $day = $entry->getDate()->format('Y-m-d');
+            if ((null !== $from && $day < $from->format('Y-m-d')) || (null !== $to && $day > $to->format('Y-m-d')) || ($validatedOnly && !$entry->isValidated())) {
+                return false;
+            }
+            foreach ($dimensions as $axis => $value) {
+                if ($line->getDimension((string) $axis) !== (string) $value) {
+                    return false;
+                }
+            }
+
+            return true;
+        }));
     }
 
     /** @return list<EntryLine> */

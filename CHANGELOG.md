@@ -3,6 +3,40 @@
 ## [Unreleased]
 
 ### Added
+- VAT. Each book has a regime (`Book::$vatRegime`, `VatRegime`: `none` by default - a property
+  company letting homes is not liable -, `franchise`, `simplified` (CA12), `normal_monthly`,
+  `normal_quarterly` (CA3)). VAT codes per book (`Tax`, `ledger_tax`: code, label, rate in basis
+  points, `TaxKind` - collected, deductible, deductible on fixed assets, reverse charge, exempt -,
+  account, a reverse charge's deductible account), the French set seeded with the chart (V20, V10,
+  V55, V21, A20, A10, A55, A21, I20, EXO, AIC20; accounts 4452, 44562, 44567 added to the SCI
+  chart), a back-office screen of their own. A VAT line knows its tax and its base
+  (`EntryLine::$tax`, `$taxBase`). `EntryDraft::taxed()` posts an amount all taxes included or
+  before tax as its base and its VAT, rounded to the cent half up, the base taking the remainder
+  (`Tax::split()`); `line()` takes a tax code and a base. A reconciliation rule's split part may
+  carry a tax code (`Reconciler::parts()`). `Report\VatReturn` gives the CA3's boxes (01, 03, 05,
+  08, 9B, 09, 13, 16, 17, 19, 20, 23, 25, 28) and the CA12's totals, with its page
+  (`ledger_admin_vat_return`, « TVA » among the reports) and a CSV. The FEC is unchanged.
+  `docs/usage-vat.md`.
+- Analytic axes. An entry line may carry dimensions (`unit=12`, `owner=5`), in a table of their
+  own (`EntryLineDimension`, `ledger_entry_line_dimension`, indexed on axis and value):
+  `EntryDraft::line(..., dimensions: [...])`, the taxed helper puts them on both lines, a reversal
+  carries them, an axis may be added to a validated line (`EntryLine::addDimension()`), never
+  changed. `IncomeStatement` and `GeneralLedger` filter on dimensions and group by an axis
+  (`byDimension()`), their pages through `?dimension[axis]=value` and `?by=axis`, the statement
+  per axis as a table and a CSV. `DimensionLabelerInterface` (tag `ledger.dimension_labeler`) names
+  an axis's values, `Dimension\Dimensions` asks the labelers. `docs/usage-dimensions.md`.
+
+### Changed
+- The ledger screens choose a record's book in the list of books (`LedgerAdminTrait::bookField()`,
+  Symfony's EntityType): the admin's AssociationType would embed the book's form, whose VAT
+  regime is an enum.
+- `Posting`, `Chart` and `Reconciler` take an optional `TaxRepository`; their other arguments are
+  unchanged.
+- Upgrading: a migration in the application adds `ledger_book.vatRegime` (default `none`),
+  `ledger_entry_line.tax_id` and `taxBase` (nullable), `ledger_tax` and
+  `ledger_entry_line_dimension`; `ledger:chart:seed <book>` adds the VAT codes to a book.
+
+### Added
 - The bank aggregators' webhooks registered by the application where the provider allows it:
   `ledger:bank:webhook [<gateway>] [--force]` (`Bank\Webhooks::ensure()`), through omnibank's
   optional `RegisterWebhook`, the secret sealed in omnibase's settings

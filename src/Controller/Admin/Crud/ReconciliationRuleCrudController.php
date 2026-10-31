@@ -44,7 +44,7 @@ class ReconciliationRuleCrudController extends AbstractCrudController
     public function configureFields(string $pageName): iterable
     {
         yield IdField::new('id')->onlyOnIndex();
-        yield AssociationField::new('book', 'Livre')->setColumns(4)->setDisabled(Crud::PAGE_EDIT === $pageName);
+        yield $this->bookField()->setColumns(4)->setDisabled(Crud::PAGE_EDIT === $pageName);
         yield TextField::new('name', 'Nom')->setColumns(4);
         yield IntegerField::new('priority', 'Priorité')->setColumns(2);
         yield BooleanField::new('enabled', 'Active')->setColumns(2);
@@ -57,7 +57,7 @@ class ReconciliationRuleCrudController extends AbstractCrudController
         yield $this->pick('account', 'Compte', Account::class, 'number')->setColumns(4);
         yield $this->pick('party', 'Tiers', Party::class, 'name', false)->setColumns(4);
         yield TextareaField::new('split', 'Ventilation (JSON)')->setRequired(false)->hideOnIndex()->setColumns(12)
-            ->setHelp('Facultatif : [{"account": "164", "amount": 85000}, {"account": "6611", "rest": true}] - "amount" en centimes, "percent", ou "rest" pour le reste.')
+            ->setHelp('Facultatif : [{"account": "164", "amount": 85000}, {"account": "6611", "rest": true}] - "amount" en centimes, "percent", ou "rest" pour le reste ; "tax": "A20" ventile la part TTC en HT et TVA.')
             ->setFormTypeOption('getter', fn (ReconciliationRule $rule) => null === $rule->getSplit() ? '' : json_encode($rule->getSplit(), \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE | \JSON_PRETTY_PRINT))
             ->setFormTypeOption('setter', function (ReconciliationRule $rule, ?string $json) {
                 $json = trim((string) $json);

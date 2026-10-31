@@ -13,6 +13,7 @@ use Base\Ledger\Controller\Admin\Crud\FiscalYearCrudController;
 use Base\Ledger\Controller\Admin\Crud\JournalCrudController;
 use Base\Ledger\Controller\Admin\Crud\PartyCrudController;
 use Base\Ledger\Controller\Admin\Crud\ReconciliationRuleCrudController;
+use Base\Ledger\Controller\Admin\Crud\VatCodeCrudController;
 use Base\Ledger\Entity\Account;
 use Base\Ledger\Entity\Book;
 use Base\Ledger\Entity\Journal;
@@ -56,6 +57,7 @@ class CrudFormsTest extends TestCase
             AccountCrudController::class, BankAccountCrudController::class, BankConnectionCrudController::class,
             BookCrudController::class, EntryCrudController::class, FiscalYearCrudController::class,
             JournalCrudController::class, PartyCrudController::class, ReconciliationRuleCrudController::class,
+            VatCodeCrudController::class,
         ] as $controller) {
             yield substr(strrchr($controller, '\\'), 1) => [$controller];
         }

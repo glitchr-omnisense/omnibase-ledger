@@ -3,6 +3,8 @@
 namespace Base\Ledger\Entity;
 
 use Base\Ledger\Repository\EntryLineRepository;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 
 /**
@@ -11,6 +13,10 @@ use Doctrine\ORM\Mapping as ORM;
  * whose debits and credits cancel out (a rent notice and its payment): they
  * share a $letter and are no longer open items. Only the lettering fields
  * change once the entry is validated.
+ *
+ * A VAT line knows its tax code and the base it was computed on ($tax,
+ * $taxBase, on the line's side); an exempt operation's base line carries
+ * its code too. A line may carry analytic dimensions (unit=12, owner=5).
  */
 #[ORM\Entity(repositoryClass: EntryLineRepository::class)]
 #[ORM\Table(name: 'ledger_entry_line')]
@@ -48,7 +54,20 @@ class EntryLine
     #[ORM\Column(type: 'date_immutable', nullable: true)]
     private ?\DateTimeImmutable $letteredOn = null;
 
-    public function __construct(Entry $entry, Account $account, int $debit, int $credit, ?Party $party = null, ?string $label = null)
+    #[ORM\ManyToOne(targetEntity: Tax::class)]
+    #[ORM\JoinColumn(nullable: true)]
+    private ?Tax $tax = null;
+
+    /** Minor units, never negative, on the line's side: what the VAT was computed on. */
+    #[ORM\Column(nullable: true)]
+    private ?int $taxBase = null;
+
+    /** @var Collection<string, EntryLineDimension> */
+    #[ORM\OneToMany(targetEntity: EntryLineDimension::class, mappedBy: 'line', cascade: ['persist'], indexBy: 'axis')]
+    private Collection $dimensions;
+
+    /** @param array<string, string|int> $dimensions axis => value */
+    public function __construct(Entry $entry, Account $account, int $debit, int $credit, ?Party $party = null, ?string $label = null, ?Tax $tax = null, ?int $taxBase = null, array $dimensions = [])
     {
         $this->entry = $entry;
         $this->account = $account;
@@ -56,6 +75,13 @@ class EntryLine
         $this->credit = $credit;
         $this->party = $party;
         $this->label = null === $label ? null : mb_substr($label, 0, 255);
+        $this->tax = $tax;
+        $this->taxBase = $taxBase;
+        $this->dimensions = new ArrayCollection();
+        foreach ($dimensions as $axis => $value) {
+            $dimension = new EntryLineDimension($this, (string) $axis, (string) $value);
+            $this->dimensions->set($dimension->getAxis(), $dimension);
+        }
         $entry->addLine($this);
     }
 
@@ -75,6 +101,53 @@ class EntryLine
     public function getLetter(): ?string { return $this->letter; }
     public function getLetteredOn(): ?\DateTimeImmutable { return $this->letteredOn; }
     public function isLettered(): bool { return null !== $this->letter; }
+    public function getTax(): ?Tax { return $this->tax; }
+    public function getTaxBase(): ?int { return $this->taxBase; }
+
+    /** @return array<string, string> axis => value */
+    public function getDimensions(): array
+    {
+        $dimensions = [];
+        foreach ($this->dimensions as $dimension) {
+            $dimensions[$dimension->getAxis()] = $dimension->getValue();
+        }
+        ksort($dimensions);
+
+        return $dimensions;
+    }
+
+    public function getDimension(string $axis): ?string
+    {
+        foreach ($this->dimensions as $dimension) {
+            if ($dimension->getAxis() === $axis) {
+                return $dimension->getValue();
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Adds an axis the line has not got - the analytic allocation completed
+     * after the fact, even on a validated entry; an axis it has keeps its
+     * value. Returns whether it was added.
+     */
+    public function addDimension(string $axis, string|int $value): bool
+    {
+        $axis = EntryLineDimension::axis($axis);
+        if (null !== $this->getDimension($axis)) {
+            return false;
+        }
+        $this->dimensions->set($axis, new EntryLineDimension($this, $axis, (string) $value));
+
+        return true;
+    }
+
+    /** @return Collection<string, EntryLineDimension> */
+    public function getDimensionRecords(): Collection
+    {
+        return $this->dimensions;
+    }
 
     /** Debit minus credit: positive when the line is owed to the book (a rent notice on 411). */
     public function getNet(): int

@@ -2,6 +2,7 @@
 
 namespace Base\Ledger\Report;
 
+use Base\Ledger\Dimension\Dimensions;
 use Base\Ledger\Entity\Book;
 use Base\Ledger\Enum\AccountType;
 use Base\Ledger\Repository\EntryLineRepository;
@@ -19,6 +20,10 @@ use Base\Ledger\Repository\EntryLineRepository;
  *
  * Draft entries count, as in the trial balance: the statement is what the
  * books say today, before the accountant validates them.
+ *
+ * Analytic axes: compute() keeps the lines carrying the dimensions asked
+ * (['unit' => '12']: one home's result), byDimension() gives the result per
+ * value of an axis (per unit, per owner), named by the labelers.
  */
 class IncomeStatement
 {
@@ -45,14 +50,17 @@ class IncomeStatement
     /** Where an account no prefix matches goes, per side. */
     private const OTHER = ['income' => 'other_income', 'expenses' => 'other_expenses'];
 
-    public function __construct(private readonly EntryLineRepository $lines)
+    public function __construct(private readonly EntryLineRepository $lines, private readonly ?Dimensions $dimensions = null)
     {
     }
 
     /**
      * Amounts are in minor units, income and expenses both positive when
      * normal (a refund larger than the charge makes it negative); previous
-     * is null throughout unless $withPrevious.
+     * is null throughout unless $withPrevious. $dimensions (axis => value)
+     * keeps the lines carrying them.
+     *
+     * @param array<string, string|int> $dimensions
      *
      * @return array{
      *     income: array<string, array{key: string, label: string, lines: list<array{number: string, label: string, amount: int, previous: ?int}>, total: int, previous: ?int}>,
@@ -61,11 +69,40 @@ class IncomeStatement
      *     previous: ?array{income: int, expenses: int, result: int}
      * }
      */
-    public function compute(Book $book, \DateTimeImmutable $from, \DateTimeImmutable $to, bool $withPrevious = false): array
+    public function compute(Book $book, \DateTimeImmutable $from, \DateTimeImmutable $to, bool $withPrevious = false, array $dimensions = []): array
     {
-        $previous = $withPrevious ? $this->lines->totalsByAccount($book, self::yearBefore($from), self::yearBefore($to)) : null;
+        $previous = $withPrevious ? $this->lines->totalsByAccount($book, self::yearBefore($from), self::yearBefore($to), false, $dimensions) : null;
 
-        return self::fromTotals($this->lines->totalsByAccount($book, $from, $to), $previous);
+        return self::fromTotals($this->lines->totalsByAccount($book, $from, $to, false, $dimensions), $previous);
+    }
+
+    /**
+     * The statement per value of $axis over the period - one per unit, per
+     * owner -, the values named by the labelers and in their order, the
+     * lines without the axis last (value null), and the whole beside them.
+     *
+     * @param array<string, string|int> $dimensions kept lines, as for compute()
+     *
+     * @return array{axis: string, groups: list<array{value: ?string, label: ?string, report: array}>, totals: array{income: int, expenses: int, result: int}}
+     */
+    public function byDimension(Book $book, \DateTimeImmutable $from, \DateTimeImmutable $to, string $axis, array $dimensions = []): array
+    {
+        $rows = $this->lines->totalsByAccount($book, $from, $to, false, $dimensions, $axis);
+        $byValue = [];
+        foreach ($rows as $row) {
+            $byValue[null === ($row['dimension'] ?? null) ? '' : (string) $row['dimension']][] = $row;
+        }
+        $values = array_values(array_filter(array_map('strval', array_keys($byValue)), fn (string $value) => '' !== $value));
+        $labels = $this->dimensions?->labels($axis, $values) ?? array_combine($values, $values);
+
+        $groups = [];
+        foreach ($byValue as $value => $totals) {
+            $value = (string) $value;
+            $groups[] = ['value' => '' === $value ? null : $value, 'label' => '' === $value ? null : ($labels[$value] ?? $value), 'report' => self::fromTotals($totals)];
+        }
+        usort($groups, fn (array $a, array $b) => [null === $a['value'], (string) $a['label']] <=> [null === $b['value'], (string) $b['label']]);
+
+        return ['axis' => $axis, 'groups' => $groups, 'totals' => self::fromTotals($rows)['totals']];
     }
 
     /**

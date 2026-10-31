@@ -6,6 +6,8 @@ use Base\Ledger\Entity\Account;
 use Base\Ledger\Entity\Book;
 use Base\Ledger\Entity\Entry;
 use Base\Ledger\Entity\EntryLine;
+use Base\Ledger\Entity\EntryLineDimension;
+use Base\Ledger\Entity\Tax;
 use Base\Ledger\Exception\LockedPeriodException;
 use Base\Ledger\Exception\PostingException;
 use Base\Ledger\Model\EntryDraft;
@@ -13,6 +15,7 @@ use Base\Ledger\Repository\AccountRepository;
 use Base\Ledger\Repository\EntryRepository;
 use Base\Ledger\Repository\FiscalYearRepository;
 use Base\Ledger\Repository\JournalRepository;
+use Base\Ledger\Repository\TaxRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Lock\LockFactory;
@@ -23,6 +26,8 @@ use Symfony\Component\Lock\LockFactory;
  * and a journal the book has, a date outside the locked period - and
  * refuses anything else with a PostingException, before writing a thing.
  * The same (book, source) twice gives back the entry already posted.
+ * A line's tax code is the book's (TaxRepository), its dimensions valid
+ * axes and values (EntryLineDimension).
  *
  * Validated, an entry is numbered "<fiscal year>-<000001>", in sequence per
  * book and fiscal year, and frozen (ValidatedEntryGuard): it is corrected
@@ -38,6 +43,7 @@ class Posting
         private readonly FiscalYearRepository $fiscalYears,
         #[Autowire('%ledger.auto_accounts%')] private readonly bool $autoAccounts = false,
         private readonly ?LockFactory $locks = null,
+        private readonly ?TaxRepository $taxes = null,
     ) {
     }
 
@@ -69,7 +75,7 @@ class Posting
 
         $draft = new EntryDraft($entry->getBook(), $entry->getJournal()->getCode(), $date ?? $entry->getDate(), 'Extourne '.($entry->getNumber() ?? '').' '.$entry->getLabel(), $source, $entry->getPiece());
         foreach ($entry->getLines() as $line) {
-            $draft->line($line->getAccount()->getNumber(), $line->getCredit(), $line->getDebit(), $line->getParty(), $line->getLabel());
+            $draft->line($line->getAccount()->getNumber(), $line->getCredit(), $line->getDebit(), $line->getParty(), $line->getLabel(), $line->getDimensions(), $line->getTax(), $line->getTaxBase());
         }
 
         return $this->record($draft, true, $entry);
@@ -128,10 +134,12 @@ class Posting
         $journal = $this->journals->findOneByCode($book, $draft->journal)
             ?? throw new PostingException(sprintf('%s has no journal %s.', $book->getName(), $draft->journal));
 
-        // Every account resolved (or created) before anything is persisted.
+        // Every account and tax resolved (or created) before anything is persisted.
         $accounts = [];
         $created = [];
-        foreach ($draft->getLines() as $line) {
+        $taxes = [];
+        foreach ($draft->getLines() as $i => $line) {
+            $taxes[$i] = $this->tax($book, $line['tax'], $draft->label);
             $number = Account::normalize($line['account']);
             if (null !== $line['party'] && $line['party']->getBook() !== $book) {
                 throw new PostingException(sprintf('%s is a party of another book.', $line['party']->getName()));
@@ -153,8 +161,8 @@ class Posting
 
         $entry = new Entry($book, $journal, $draft->date, $draft->label, $draft->source, $draft->piece);
         $entry->setReversalOf($reversalOf);
-        foreach ($draft->getLines() as $line) {
-            new EntryLine($entry, $accounts[Account::normalize($line['account'])], $line['debit'], $line['credit'], $line['party'], $line['label']);
+        foreach ($draft->getLines() as $i => $line) {
+            new EntryLine($entry, $accounts[Account::normalize($line['account'])], $line['debit'], $line['credit'], $line['party'], $line['label'], $taxes[$i], $line['taxBase'] ?? null, $line['dimensions'] ?? []);
         }
 
         foreach ($created as $account) {
@@ -196,10 +204,41 @@ class Posting
             if (0 === $line['debit'] && 0 === $line['credit']) {
                 throw new PostingException(sprintf('"%s", line %d (%s): the line has no amount.', $draft->label, $i + 1, $line['account']));
             }
+            if (($line['taxBase'] ?? 0) < 0) {
+                throw new PostingException(sprintf('"%s", line %d (%s): a tax base is never negative - it is on the line\'s side.', $draft->label, $i + 1, $line['account']));
+            }
+            if (null !== ($line['taxBase'] ?? null) && null === ($line['tax'] ?? null)) {
+                throw new PostingException(sprintf('"%s", line %d (%s): a tax base without its tax.', $draft->label, $i + 1, $line['account']));
+            }
+            foreach ($line['dimensions'] ?? [] as $axis => $value) {
+                try {
+                    EntryLineDimension::axis((string) $axis);
+                    EntryLineDimension::value((string) $value);
+                } catch (\InvalidArgumentException $e) {
+                    throw new PostingException(sprintf('"%s", line %d (%s): %s', $draft->label, $i + 1, $line['account'], $e->getMessage()));
+                }
+            }
         }
         if ($draft->getTotalDebit() !== $draft->getTotalCredit()) {
             throw new PostingException(sprintf('"%s" is not balanced: %d debit, %d credit.', $draft->label, $draft->getTotalDebit(), $draft->getTotalCredit()));
         }
+    }
+
+    /** The Tax a draft line names, by its code or itself: the book's, or a PostingException. */
+    private function tax(Book $book, Tax|string|null $tax, string $label): ?Tax
+    {
+        if (null === $tax) {
+            return null;
+        }
+        if (\is_string($tax)) {
+            $tax = $this->taxes?->findOneByCode($book, $tax)
+                ?? throw new PostingException(sprintf('"%s": %s has no tax %s.', $label, $book->getName(), Tax::normalize($tax)));
+        }
+        if ($tax->getBook() !== $book) {
+            throw new PostingException(sprintf('"%s": tax %s is another book\'s.', $label, $tax->getCode()));
+        }
+
+        return $tax;
     }
 
     /** Numbering and the flush that saves the number, one process at a time per book when symfony/lock is there. */

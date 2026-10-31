@@ -1,0 +1,1 @@
+{# An axis's name: its translation (dimension.unit), else its key. #}{% set name = ('dimension.' ~ axis)|trans({}, 'ledger') %}{{ name starts with 'dimension.' ? axis : name }}

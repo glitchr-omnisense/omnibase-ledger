@@ -1,0 +1,12 @@
+{# The analytic dimensions a report keeps (`filter`, axis => value, named by
+   `filter_labels`), each removable: `current` is the page's route, `link`
+   its other parameters. #}
+{% if filter|default({}) is not empty %}
+<div class="toolbar no-print">
+    <span class="muted">{{ 'report.filtered'|trans({}, 'ledger') }}</span>
+    {% for axis, value in filter %}
+    <span class="pill">{{ include('@Ledger/admin/_axis.html.twig', {axis: axis}) }} : {{ filter_labels[axis] ?? value }}
+        <a href="{{ path(current, link|merge({dimension: filter|filter((v, k) => k != axis)})) }}" title="{{ 'report.remove_filter'|trans({}, 'ledger') }}">×</a></span>
+    {% endfor %}
+</div>
+{% endif %}

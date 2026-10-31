@@ -20,10 +20,11 @@ order: 45
 | `ledger_admin_bank_renew` | `/admin/ledger/bank/connection/{connection}/renew` | GET | manage, link token |
 | `ledger_admin_bank_sync` | `/admin/ledger/bank/{bankAccount}/sync` | GET | manage, link token |
 | `ledger_admin_trial_balance` | `/admin/ledger/book/{book}/trial-balance` | GET | view |
-| `ledger_admin_general_ledger` | `/admin/ledger/book/{book}/general-ledger` | GET | view |
+| `ledger_admin_general_ledger` | `/admin/ledger/book/{book}/general-ledger` (`?dimension[axis]=value`, `?by=axis`) | GET | view |
 | `ledger_admin_open_items` | `/admin/ledger/book/{book}/open-items` | GET | view |
-| `ledger_admin_income_statement` | `/admin/ledger/book/{book}/income-statement` | GET | view |
+| `ledger_admin_income_statement` | `/admin/ledger/book/{book}/income-statement` (`?dimension[axis]=value`, `?by=axis`) | GET | view |
 | `ledger_admin_balance_sheet` | `/admin/ledger/book/{book}/balance-sheet` | GET | view |
+| `ledger_admin_vat_return` | `/admin/ledger/book/{book}/vat-return` (`?from=&to=`, `?format=csv`) | GET | view |
 | `ledger_admin_fec` | `/admin/ledger/book/{book}/fec/{year}` | GET | view |
 | `ledger_admin_book_seed` | `/admin/ledger/book/{book}/seed` | GET | manage, link token |
 | `ledger_admin_entry_validate` | `/admin/ledger/entry/{entry}/validate` | GET | manage, link token |
@@ -37,7 +38,7 @@ Ids are digits; `{gateway}` is `[a-z0-9_-]+`; `{year}` four digits. "View" and "
 
 | Command | Arguments and options | What it does |
 |---|---|---|
-| `ledger:chart:seed` | `book` (id, SIREN or name); `--chart=` (a file of `config/charts/`, default `ledger.chart`) | adds the chart's missing accounts and journals |
+| `ledger:chart:seed` | `book` (id, SIREN or name); `--chart=` (a file of `config/charts/`, default `ledger.chart`) | adds the chart's missing accounts, journals and VAT codes |
 | `ledger:bank:sync` | `[book]`; `--no-reconcile` | syncs every API-fed bank account (all books, or one) and reconciles what is sure; `files` accounts are skipped; fails (exit 1) when an account failed, each reported as a warning |
 | `ledger:bank:opening` | `[book]`; `--adjust`; `--reclassify` | posts the opening entry of every bank account that has none (so the books hold the bank's balance); `--adjust` replaces one the bank no longer agrees with; `--reclassify` first moves each account onto the ledger account its kind belongs under (a loan on 164x) |
 | `ledger:bank:aggregate` | `[book]` | writes every bank account's precomputed rows again (all books, or one), one line per account: how many days, category rows, counterparty rows and recurring flows |

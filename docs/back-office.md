@@ -51,7 +51,8 @@ for what changes something.
 
 | CRUD | Slug | What it allows |
 |---|---|---|
-| `BookCrudController` | `books` | the books; actions Balance (trial balance), Impayés (open items), Plan comptable (seed the chart, asked to confirm); a book with entries cannot be deleted |
+| `BookCrudController` | `books` | the books and their VAT regime; actions Balance (trial balance), Impayés (open items), TVA (the VAT return), Plan comptable (seed the chart and its VAT codes, asked to confirm); a book with entries cannot be deleted |
+| `VatCodeCrudController` | `vat-codes` | the VAT codes: book and code chosen when created, label, rate (basis points), kind, VAT account, a reverse charge's deductible account; a code a line was posted with cannot be deleted |
 | `AccountCrudController` | `accounts` | the chart, by number, 50 a page, searched by number and label, filtered by type; book and number chosen when created, shown on edit; an account with lines cannot be deleted |
 | `JournalCrudController` | `journals` | book and code chosen when created; a journal with entries cannot be deleted |
 | `FiscalYearCrudController` | `fiscal-years` | a new one is this calendar year of the first book; closing it is setting `closedAt` |
@@ -60,7 +61,7 @@ for what changes something.
 | `BankConnectionCrudController` | `bank-connections` | no "new" (opened from the connect page); Renouveler, except for `files`; the record's note says when the bank asks for renewal, else the last error; the state is never shown |
 | `BankAccountCrudController` | `bank-accounts` | no "new"; Rapprocher, Importer un relevé, Synchroniser (not for `files`); the ledger account and journal chosen in a list grouped by book |
 | `BankLineCrudController` | `bank-lines` | read-only, newest first, 50 a page, filtered by status; Rapprocher opens the account's reconciliation |
-| `ReconciliationRuleCrudController` | `reconciliation-rules` | name, priority, enabled, pattern, counterparty IBAN, direction, account, party, split (JSON); a new rule points to `627` (or the first account) of the first book |
+| `ReconciliationRuleCrudController` | `reconciliation-rules` | name, priority, enabled, pattern, counterparty IBAN, direction, account, party, split (JSON, a part may carry `"tax"`); a new rule points to `627` (or the first account) of the first book |
 
 A new record belongs to the first book until its form says otherwise; with no book, "Create a
 book first". The CRUDs' routes are `admin_crud_<slug>_*` (`admin_crud_bank_lines_index`...).
@@ -93,10 +94,15 @@ token `ledger_bank_connect`), then the upload page; for another gateway (token
 message. The book is `?book=`, else the first.
 
 **Reports** (`/admin/ledger/book/{book}/...`): trial balance, general ledger (`?account=` a
-prefix), open items (`?account=`, `411` by default), compte de résultat and bilan, printed
+prefix), open items (`?account=`, `411` by default), compte de résultat, bilan and the VAT
+return (« TVA »: the CA3's boxes or the CA12's totals; a book outside VAT says so), printed
 without the admin's chrome, `?n1=0` without N-1, `?format=csv` downloaded; the period is
 `?from=&to=` (Y-m-d), or `?year=` (the fiscal year ending in it), else the current fiscal
-year; the bilan is `?at=`, else the period's end or today, whichever is earlier. The FEC of a
+year; the bilan is `?at=`, else the period's end or today, whichever is earlier; the VAT
+return's period is `?from=&to=`, else the last one the book's regime declares. The general
+ledger and the compte de résultat keep the lines of `?dimension[axis]=value` (a filter shown
+and removable) and group by `?by=axis` (« Par axe », among the axes the book's lines carry): the
+compte de résultat per axis is a table of the values, each opening its own statement. The FEC of a
 year downloads from `/fec/{year}`.
 
 ## Dashboard widgets

@@ -19,6 +19,7 @@ One legal entity's accounts (`ledger_book`).
 | `siren` | `string(9)`, nullable | the SIREN; `setSiren()` keeps the digits only, an empty value is `null`. The FEC's file name starts with it |
 | `currency` | `string(3)` | `EUR` by default, upper-cased |
 | `lockedUntil` | `date`, nullable | nothing dated on or before it can be posted, changed or reversed |
+| `vatRegime` | `VatRegime`, `string(20)`, default `none` | how its VAT is declared ([VAT](usage-vat.md)) |
 | `createdAt` | `datetime` | |
 
 `isLocked(\DateTimeInterface $date)` compares days. `getBook()` returns the book itself, so
@@ -97,6 +98,12 @@ An `EntryLine` (`ledger_entry_line`, indexed on `letter`):
 | `label` | `string(255)`, nullable | the line's own label, else the entry's |
 | `letter` | `string(8)`, nullable | the lettering code (`AAA`) |
 | `letteredOn` | `date`, nullable | |
+| `tax` | relation to `Tax`, nullable | a VAT line's code (an exempt base line's too) |
+| `taxBase` | `integer`, nullable | what the VAT was computed on, minor units, on the line's side |
+| `dimensions` | one-to-many `EntryLineDimension`, cascade persist, by axis | its analytic axes ([Analytic axes](usage-dimensions.md)) |
+
+`getDimensions()` (axis => value), `getDimension($axis)`, `addDimension($axis, $value)` (an
+axis the line has not got, even once validated).
 
 `getNet()` is debit minus credit: positive when the line is owed to the book (a rent notice
 on 411). An open item is an unlettered line.
@@ -143,6 +150,19 @@ and status): a transaction as the bank booked it.
 `getSource()` is the source of its next bank entry: `bank:<id>`, then `bank:<id>/2` after an
 undo, and so on.
 
+## `Tax`
+
+A VAT code of a book (`ledger_tax`, unique on book and code): `code` (`string(16)`,
+upper-cased, no spaces), `label`, `rate` (basis points: 2000 for 20 %), `kind` (`TaxKind`),
+`account` (nullable: none for an exempt code), `deductibleAccount` (a reverse charge's 44566).
+`split(int $amount, bool $taxIncluded = true)` gives `[base, VAT]`, rounded to the cent half up,
+the base taking the remainder. See [VAT](usage-vat.md).
+
+## `EntryLineDimension`
+
+An analytic axis of a line and its value (`ledger_entry_line_dimension`, unique on line and
+axis, indexed on axis and value). `axis()` and `value()` check and normalise them.
+
 ## `ReconciliationRule`
 
 What to post a recurring bank line against when nothing open matches it
@@ -173,6 +193,8 @@ an IBAN.
 | `ConsentState` | `ACTIVE`, `NEEDS_RENEWAL`, `REVOKED`, `NONE` | `of()`: from Omnibank's `ConsentStatus` (or a string), by value or name, `NONE` otherwise |
 | `PartyKind` | `TENANT`, `SUPPLIER`, `ASSOCIATE`, `OTHER` | `collective()`: `411`, `401`, `455`, `467` |
 | `RuleSign` | `ANY`, `IN`, `OUT` | `accepts(int $amount)` (`ANY` refuses `0`) |
+| `TaxKind` | `COLLECTED`, `DEDUCTIBLE`, `DEDUCTIBLE_ASSETS`, `REVERSE_CHARGE`, `EXEMPT` | `label()`, `isCreditNormal()` |
+| `VatRegime` | `NONE`, `FRANCHISE`, `SIMPLIFIED`, `NORMAL_MONTHLY`, `NORMAL_QUARTERLY` | `isLiable()`, `form()`, `label()`, `lastPeriod()` |
 
 `AccountType::guess()` follows the PCG's classes: `10`-`14` equity, the rest of class 1
 liability; classes 2, 3, 5 asset; 6 expense; 7 income; class 4 by its longest prefix (`40`
@@ -189,8 +211,10 @@ numbers and a journal code rather than entities:
 new EntryDraft(Book $book, string $journal, \DateTimeImmutable $date, string $label, string $source, ?string $piece = null)
 ```
 
-`line(string $account, int $debit, int $credit, ?Party $party = null, ?string $label = null): self`
-adds a line; `getLines()`, `getTotalDebit()`, `getTotalCredit()`.
+`line(string $account, int $debit, int $credit, ?Party $party = null, ?string $label = null, array $dimensions = [], Tax|string|null $tax = null, ?int $taxBase = null): self`
+adds a line; `taxed(string $account, int $debit, int $credit, Tax $tax, bool $taxIncluded = true, ?Party $party = null, ?string $label = null, array $dimensions = [])`
+adds a taxed amount as its base and its VAT ([VAT](usage-vat.md)); `getLines()`,
+`getTotalDebit()`, `getTotalCredit()`. Existing calls are unchanged.
 
 ## `Text`
 

@@ -5,7 +5,8 @@ Double-entry accounting for the sites built on
 accounts (PCG), journals, fiscal years, parties and lettering, bank feeds through
 [omnisense/omnibank](https://github.com/glitchr-omnisense/omnibank), the reconciliation of
 bank lines with ranked suggestions, and the reports a French accountant reads - trial
-balance, general ledger, open items, compte de résultat, bilan, FEC. It is a Symfony bundle
+balance, general ledger, open items, compte de résultat, bilan, the VAT return (CA3, CA12),
+FEC - and analytic axes on entry lines (per unit, per owner). It is a Symfony bundle
 (`Base\Ledger\LedgerBundle`) on the core 3 or 4, with its back office on omnibase/admin.
 
 It was written for French real-estate companies (SCI): rent notices, tenants' payments,
@@ -43,6 +44,10 @@ orders stay the application's, which posts what they mean.
 - [Reconciliation](usage-reconciliation.md): the matcher's ranks and scores, applying a
   suggestion, automatic reconciliation, undoing, rules and splits, the Stripe pattern.
 - [Reports and the FEC](usage-reports.md): every report's shape, the CSV downloads, the FEC.
+- [VAT](usage-vat.md): the book's regime, the codes, taxed postings, rules with a tax code,
+  the VAT return (CA3, CA12).
+- [Analytic axes](usage-dimensions.md): dimensions on entry lines, the reports filtered and
+  grouped by them, the labelers.
 - [The back office](back-office.md): the screens, the pages, the dashboard widgets, who sees
   a book.
 - [Configuration reference](configuration.md): `ledger:`, the parameters, the services.

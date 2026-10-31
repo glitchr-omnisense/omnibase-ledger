@@ -5,5 +5,6 @@
     <a class="btn btn-sm {{ current == 'ledger_admin_open_items' ? 'btn-primary' : 'btn-secondary' }}" href="{{ path('ledger_admin_open_items', {book: book.id}) }}"><i class="fa-solid fa-hourglass-half"></i> {{ 'report.open_items'|trans({}, 'ledger') }}</a>
     <a class="btn btn-sm {{ current == 'ledger_admin_income_statement' ? 'btn-primary' : 'btn-secondary' }}" href="{{ path('ledger_admin_income_statement', {book: book.id, year: year ?? null}) }}"><i class="fa-solid fa-chart-line"></i> {{ 'report.income_statement'|trans({}, 'ledger') }}</a>
     <a class="btn btn-sm {{ current == 'ledger_admin_balance_sheet' ? 'btn-primary' : 'btn-secondary' }}" href="{{ path('ledger_admin_balance_sheet', {book: book.id, year: year ?? null}) }}"><i class="fa-solid fa-building-columns"></i> {{ 'report.balance_sheet'|trans({}, 'ledger') }}</a>
+    <a class="btn btn-sm {{ current == 'ledger_admin_vat_return' ? 'btn-primary' : 'btn-secondary' }}" href="{{ path('ledger_admin_vat_return', {book: book.id}) }}"><i class="fa-solid fa-percent"></i> {{ 'report.vat_return'|trans({}, 'ledger') }}</a>
     {% if year ?? null %}<a class="btn btn-sm btn-secondary" href="{{ path('ledger_admin_fec', {book: book.id, year: year}) }}"><i class="fa-solid fa-file-export"></i> FEC {{ year }}</a>{% endif %}
 </div>

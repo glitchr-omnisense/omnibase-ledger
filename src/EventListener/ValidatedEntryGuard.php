@@ -4,6 +4,7 @@ namespace Base\Ledger\EventListener;
 
 use Base\Ledger\Entity\Entry;
 use Base\Ledger\Entity\EntryLine;
+use Base\Ledger\Entity\EntryLineDimension;
 use Base\Ledger\Exception\LockedEntryException;
 use Doctrine\Bundle\DoctrineBundle\Attribute\AsDoctrineListener;
 use Doctrine\ORM\Event\OnFlushEventArgs;
@@ -12,10 +13,11 @@ use Doctrine\ORM\UnitOfWork;
 
 /**
  * A validated entry is part of the books for good: whatever tries to change
- * it, or one of its lines, or to delete either, or to add a line to it, is
+ * it, or one of its lines or their dimensions, or to delete either, or to add a line to it, is
  * refused at flush time - the back office, a fixture, a careless service.
- * The lettering fields of its lines are the only exception: lettering is
- * done after the fact. A mistake is corrected by a reversal entry
+ * The lettering fields of its lines are the exception: lettering is
+ * done after the fact; and an analytic axis may be added to a line that
+ * has not got it (EntryLine::addDimension()), never changed nor removed. A mistake is corrected by a reversal entry
  * (Posting::reverse()).
  */
 #[AsDoctrineListener(event: Events::onFlush)]
@@ -26,6 +28,13 @@ class ValidatedEntryGuard
     public function onFlush(OnFlushEventArgs $args): void
     {
         $unitOfWork = $args->getObjectManager()->getUnitOfWork();
+
+        // An axis may be added to a validated line (the analytic allocation completed, the amounts untouched), not changed nor removed.
+        foreach ([...$unitOfWork->getScheduledEntityUpdates(), ...$unitOfWork->getScheduledEntityDeletions()] as $entity) {
+            if ($entity instanceof EntryLineDimension && $this->isFrozen($entity->getLine()->getEntry(), $unitOfWork)) {
+                throw new LockedEntryException(sprintf('Entry %s is validated: its lines\' dimensions can be added, not changed.', $entity->getLine()->getEntry()->getNumber()));
+            }
+        }
 
         foreach ($unitOfWork->getScheduledEntityUpdates() as $entity) {
             if ($entity instanceof Entry && $this->isFrozen($entity, $unitOfWork)) {

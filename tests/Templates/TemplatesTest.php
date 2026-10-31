@@ -9,6 +9,9 @@ use Base\Ledger\Report\GeneralLedger;
 use Base\Ledger\Report\IncomeStatement;
 use Base\Ledger\Report\OpenItems;
 use Base\Ledger\Report\TrialBalance;
+use Base\Ledger\Report\VatReturn;
+use Base\Ledger\Enum\VatRegime;
+use Base\Ledger\Model\EntryDraft;
 use Base\Ledger\Twig\LedgerExtension;
 use Symfony\Bridge\Twig\Extension\TranslationExtension;
 use Symfony\Component\Translation\Loader\YamlFileLoader;
@@ -130,6 +133,47 @@ class TemplatesTest extends InMemoryLedger
         $html = $this->block('@Ledger/admin/open_items.html.twig', ['book' => $this->book, 'prefix' => '411', 'report' => OpenItems::fromLines($this->lettering()->openItems($this->book))]);
         self::assertStringContainsString('Jean Dupont', $html);
         self::assertStringContainsString('A1', $html);
+    }
+
+    public function testTheVatReturnAndTheStatementPerUnit(): void
+    {
+        $context = ['book' => $this->book, 'from' => new \DateTimeImmutable('2026-09-01'), 'to' => new \DateTimeImmutable('2026-09-30'), 'year' => '2026'];
+
+        $html = $this->block('@Ledger/admin/vat_return.html.twig', $context + ['report' => VatReturn::fromTotals([], VatRegime::NONE)]);
+        self::assertStringContainsString('pas assujetti à la TVA', $html);
+        self::assertStringContainsString('Total de la TVA brute due', $html);
+        self::assertStringContainsString('/ledger_admin_vat_return?book=1&amp;from=2026-09-01&amp;to=2026-09-30&amp;format=csv', $html);
+        self::assertStringNotContainsString('CA12', $html);
+
+        $this->frenchTaxes();
+        $tenant = $this->party('Cabinet Weber', reference: 'COM1');
+        $this->posting()->post((new EntryDraft($this->book, 'VT', new \DateTimeImmutable('2026-09-01'), 'Loyer commercial', 's1', null))
+            ->taxed('706', 0, 120000, $this->taxes['V20'])->line($tenant->getAccountNumber(), 120000, 0, $tenant));
+        $report = VatReturn::fromTotals($this->lineRepository()->taxTotals($this->book, $context['from'], $context['to']), VatRegime::SIMPLIFIED);
+        $html = $this->block('@Ledger/admin/vat_return.html.twig', $context + ['report' => $report]);
+        self::assertStringNotContainsString('pas assujetti', $html);
+        self::assertStringContainsString('Déclaration annuelle CA12', $html);
+        self::assertMatchesRegularExpression('#<td>08</td>\s*<td>Taux normal 20 %</td>\s*<td class="num">1 000,00</td>\s*<td class="num">200,00</td>#u', str_replace("\u{202F}", ' ', str_replace("\u{A0}", ' ', $html)));
+
+        $html = $this->block('@Ledger/admin/income_statement_by.html.twig', $context + [
+            'by' => 'unit', 'axes' => ['unit' => 2], 'filter' => [], 'filter_labels' => [],
+            'report' => ['axis' => 'unit', 'totals' => ['income' => 1000, 'expenses' => 0, 'result' => 1000], 'groups' => [
+                ['value' => '3', 'label' => 'Appartement Krutenau', 'report' => IncomeStatement::fromTotals([['number' => '706', 'label' => 'Loyers', 'type' => 'income', 'debit' => 0, 'credit' => 1000]])],
+                ['value' => null, 'label' => null, 'report' => IncomeStatement::fromTotals([])],
+            ]],
+        ]);
+        self::assertStringContainsString('<th>Bien</th>', $html);
+        self::assertStringContainsString('Appartement Krutenau', $html);
+        self::assertStringContainsString('Non affecté', $html);
+        self::assertStringContainsString('dimension%5Bunit%5D=3', $html);
+        self::assertStringContainsString('<option value="unit" selected>Bien</option>', $html);
+
+        $html = $this->block('@Ledger/admin/income_statement.html.twig', $context + [
+            'compare' => false, 'previous_from' => $context['from'], 'previous_to' => $context['to'], 'report' => IncomeStatement::fromTotals([]),
+            'axes' => ['unit' => 2], 'filter' => ['unit' => '3'], 'filter_labels' => ['unit' => 'Appartement Krutenau'], 'by' => null,
+        ]);
+        self::assertStringContainsString('Bien : Appartement Krutenau', $html);
+        self::assertStringContainsString('<input type="hidden" name="dimension[unit]" value="3">', $html);
     }
 
     public function testTheUploadAndConnectPages(): void

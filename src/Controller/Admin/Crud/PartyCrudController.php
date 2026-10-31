@@ -43,7 +43,7 @@ class PartyCrudController extends AbstractCrudController
     public function configureFields(string $pageName): iterable
     {
         yield IdField::new('id')->onlyOnIndex();
-        yield AssociationField::new('book', 'Livre')->setColumns(4)->setDisabled(Crud::PAGE_EDIT === $pageName);
+        yield $this->bookField()->setColumns(4)->setDisabled(Crud::PAGE_EDIT === $pageName);
         yield TextField::new('kind', 'Type')->setColumns(4)
             ->setFormType(EnumType::class)->setFormTypeOptions(['class' => PartyKind::class])
             ->formatValue(fn ($value) => self::enumValue($value));

@@ -20,6 +20,9 @@ use Symfony\Component\Validator\Constraints as Assert;
  * [{"account": "164", "amount": 85000}, {"account": "6611", "rest": true}]
  * - "amount" a fixed part in minor units, "percent" a share, "rest" what
  * remains (the rule's own account takes the rest when no part says so).
+ * A part may carry a tax code ("tax": "A20"): it is then an amount all
+ * taxes included, posted as its base and its VAT - a recurring supplier's
+ * bank line posts its VAT: [{"account": "6061", "rest": true, "tax": "A20"}].
  */
 #[ORM\Entity(repositoryClass: ReconciliationRuleRepository::class)]
 #[ORM\Table(name: 'ledger_reconciliation_rule')]
@@ -57,7 +60,7 @@ class ReconciliationRule
     #[ORM\Column]
     private int $priority = 0;
 
-    /** @var list<array{account: string, amount?: int, percent?: float, rest?: bool, label?: string}>|null */
+    /** @var list<array{account: string, amount?: int, percent?: float, rest?: bool, label?: string, tax?: string}>|null */
     #[ORM\Column(type: 'json', nullable: true)]
     private ?array $split = null;
 

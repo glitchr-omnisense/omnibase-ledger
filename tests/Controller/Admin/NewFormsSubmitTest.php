@@ -10,6 +10,10 @@ use Base\Ledger\Controller\Admin\Crud\FiscalYearCrudController;
 use Base\Ledger\Controller\Admin\Crud\JournalCrudController;
 use Base\Ledger\Controller\Admin\Crud\PartyCrudController;
 use Base\Ledger\Controller\Admin\Crud\ReconciliationRuleCrudController;
+use Base\Ledger\Controller\Admin\Crud\VatCodeCrudController;
+use Base\Ledger\Entity\Tax;
+use Base\Ledger\Enum\TaxKind;
+use Base\Ledger\Enum\VatRegime;
 use Base\Ledger\Entity\Account;
 use Base\Ledger\Entity\Book;
 use Base\Ledger\Entity\FiscalYear;
@@ -72,9 +76,16 @@ class NewFormsSubmitTest extends TestCase
         yield 'Book' => [
             BookCrudController::class,
             fn () => new Book(''),
-            ['name' => 'SCI du Ried', 'siren' => '123 456 789', 'currency' => 'eur', 'lockedUntil' => '2025-12-31'],
-            fn (Book $b) => ['name' => $b->getName(), 'siren' => $b->getSiren(), 'currency' => $b->getCurrency(), 'lockedUntil' => $b->getLockedUntil()?->format('Y-m-d')],
-            ['name' => 'SCI du Ried', 'siren' => '123456789', 'currency' => 'EUR', 'lockedUntil' => '2025-12-31'],
+            ['name' => 'SCI du Ried', 'siren' => '123 456 789', 'currency' => 'eur', 'lockedUntil' => '2025-12-31', 'vatRegime' => 'normal_quarterly'],
+            fn (Book $b) => ['name' => $b->getName(), 'siren' => $b->getSiren(), 'currency' => $b->getCurrency(), 'lockedUntil' => $b->getLockedUntil()?->format('Y-m-d'), 'vatRegime' => $b->getVatRegime()],
+            ['name' => 'SCI du Ried', 'siren' => '123456789', 'currency' => 'EUR', 'lockedUntil' => '2025-12-31', 'vatRegime' => VatRegime::NORMAL_QUARTERLY],
+        ];
+        yield 'Tax' => [
+            VatCodeCrudController::class,
+            fn () => new Tax($book(), '', '', 2000, TaxKind::COLLECTED),
+            ['code' => 'v 85', 'label' => 'TVA collectée 8,5 %', 'rate' => '850', 'kind' => 'collected'],
+            fn (Tax $t) => ['code' => $t->getCode(), 'label' => $t->getLabel(), 'rate' => $t->getRate(), 'kind' => $t->getKind()],
+            ['code' => 'V85', 'label' => 'TVA collectée 8,5 %', 'rate' => 850, 'kind' => TaxKind::COLLECTED],
         ];
         yield 'FiscalYear' => [
             FiscalYearCrudController::class,
@@ -184,7 +195,7 @@ class NewFormsSubmitTest extends TestCase
     /** The identity of a record is chosen when it is created and shown afterwards. */
     public function testTheBookAndTheCodeAreFixedOnceCreated(): void
     {
-        foreach ([JournalCrudController::class => ['book', 'code'], AccountCrudController::class => ['book', 'number'], FiscalYearCrudController::class => ['book'], PartyCrudController::class => ['book'], ReconciliationRuleCrudController::class => ['book']] as $controller => $properties) {
+        foreach ([JournalCrudController::class => ['book', 'code'], AccountCrudController::class => ['book', 'number'], FiscalYearCrudController::class => ['book'], PartyCrudController::class => ['book'], ReconciliationRuleCrudController::class => ['book'], VatCodeCrudController::class => ['book', 'code']] as $controller => $properties) {
             $new = self::fields($controller, FieldDescriptor::PAGE_NEW);
             $edit = self::fields($controller, FieldDescriptor::PAGE_EDIT);
             foreach ($properties as $property) {

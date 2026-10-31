@@ -16,6 +16,7 @@ use Base\Ledger\Exception\LedgerException;
 use Base\Ledger\Exception\ReconciliationException;
 use Base\Ledger\Model\EntryDraft;
 use Base\Ledger\Repository\BankLineRepository;
+use Base\Ledger\Repository\TaxRepository;
 use Base\Ledger\Service\Lettering;
 use Base\Ledger\Service\Posting;
 use Doctrine\ORM\EntityManagerInterface;
@@ -44,6 +45,7 @@ class Reconciler
         private readonly BankLineRepository $bankLines,
         #[Autowire('%ledger.reconciliation.auto_threshold%')] private readonly float $threshold = 0.9,
         private readonly ?EventDispatcherInterface $dispatcher = null,
+        private readonly ?TaxRepository $taxes = null,
     ) {
     }
 
@@ -91,9 +93,16 @@ class Reconciler
             $first = $suggestion->openItems[0];
             $draft->line($first->getAccount()->getNumber(), $in ? 0 : $abs, $in ? $abs : 0, $first->getParty());
         } elseif (null !== $suggestion->rule) {
-            foreach ($this->split($suggestion->rule, $abs) as [$number, $part, $label]) {
+            foreach ($this->parts($suggestion->rule, $abs) as [$number, $part, $label, $code]) {
                 $party = Account::normalize($number) === $suggestion->rule->getAccount()->getNumber() ? ($suggestion->rule->getParty() ?? $suggestion->party) : null;
-                $draft->line($number, $in ? 0 : $part, $in ? $part : 0, $party, $label);
+                if (null === $code) {
+                    $draft->line($number, $in ? 0 : $part, $in ? $part : 0, $party, $label);
+                    continue;
+                }
+                // A part with a tax code is an amount all taxes included: its base and its VAT.
+                $tax = $this->taxes?->findOneByCode($line->getBook(), $code)
+                    ?? throw new ReconciliationException(sprintf('%s: rule "%s" names tax %s, which %s does not have.', $line, $suggestion->rule->getName(), $code, $line->getBook()->getName()));
+                $draft->taxed($number, $in ? 0 : $part, $in ? $part : 0, $tax, true, $party, $label);
             }
         } elseif (null !== $suggestion->party) {
             // A payment on account: the party's account, lettered later.
@@ -234,9 +243,21 @@ class Reconciler
      */
     public function split(ReconciliationRule $rule, int $amount): array
     {
+        return array_map(fn (array $part) => [$part[0], $part[1], $part[2]], $this->parts($rule, $amount));
+    }
+
+    /**
+     * split()'s parts with the tax code each may carry ("tax": "A20"): the
+     * part is then an amount all taxes included, posted as its base and its
+     * VAT.
+     *
+     * @return list<array{0: string, 1: int, 2: ?string, 3: ?string}>
+     */
+    public function parts(ReconciliationRule $rule, int $amount): array
+    {
         $split = $rule->getSplit();
         if (null === $split || [] === $split) {
-            return [[$rule->getAccount()->getNumber(), $amount, null]];
+            return [[$rule->getAccount()->getNumber(), $amount, null, null]];
         }
 
         $parts = [];
@@ -245,21 +266,22 @@ class Reconciler
         foreach (array_values($split) as $i => $part) {
             $number = (string) ($part['account'] ?? $rule->getAccount()->getNumber());
             $label = isset($part['label']) ? (string) $part['label'] : null;
+            $code = isset($part['tax']) && '' !== trim((string) $part['tax']) ? (string) $part['tax'] : null;
             if (!empty($part['rest'])) {
                 $restIndex = \count($parts);
-                $parts[] = [$number, 0, $label];
+                $parts[] = [$number, 0, $label, $code];
                 continue;
             }
             $value = isset($part['amount']) ? (int) $part['amount'] : (int) round($amount * ((float) ($part['percent'] ?? 0)) / 100);
             $value = max(0, min($value, $left));
             $left -= $value;
-            $parts[] = [$number, $value, $label];
+            $parts[] = [$number, $value, $label, $code];
         }
         if ($left > 0) {
             if (null !== $restIndex) {
                 $parts[$restIndex][1] += $left;
             } else {
-                $parts[] = [$rule->getAccount()->getNumber(), $left, null];
+                $parts[] = [$rule->getAccount()->getNumber(), $left, null, null];
             }
         }
 

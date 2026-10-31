@@ -2,6 +2,7 @@
 
 namespace Base\Ledger\Entity;
 
+use Base\Ledger\Enum\VatRegime;
 use Base\Ledger\Repository\BookRepository;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Validator\Constraints as Assert;
@@ -11,6 +12,10 @@ use Symfony\Component\Validator\Constraints as Assert;
  * parties, entries and bank accounts all hang off it. Entries dated on or
  * before $lockedUntil can no longer be posted, changed or reversed - the
  * period is closed, declared, or handed to the accountant.
+ *
+ * $vatRegime says how its VAT is declared: none by default (a property
+ * company letting homes is not liable), the VAT return (Report\VatReturn)
+ * reading its taxed lines otherwise.
  */
 #[ORM\Entity(repositoryClass: BookRepository::class)]
 #[ORM\Table(name: 'ledger_book')]
@@ -33,6 +38,9 @@ class Book
 
     #[ORM\Column(type: 'date_immutable', nullable: true)]
     private ?\DateTimeImmutable $lockedUntil = null;
+
+    #[ORM\Column(length: 20, enumType: VatRegime::class, options: ['default' => 'none'])]
+    private VatRegime $vatRegime = VatRegime::NONE;
 
     #[ORM\Column(type: 'datetime_immutable')]
     private \DateTimeImmutable $createdAt;
@@ -60,6 +68,8 @@ class Book
     public function getLockedUntil(): ?\DateTimeImmutable { return $this->lockedUntil; }
     public function setLockedUntil(?\DateTimeImmutable $lockedUntil): self { $this->lockedUntil = $lockedUntil?->setTime(0, 0); return $this; }
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
+    public function getVatRegime(): VatRegime { return $this->vatRegime; }
+    public function setVatRegime(VatRegime $vatRegime): self { $this->vatRegime = $vatRegime; return $this; }
 
     /** Whether $date falls in the locked period (on or before lockedUntil). */
     public function isLocked(\DateTimeInterface $date): bool

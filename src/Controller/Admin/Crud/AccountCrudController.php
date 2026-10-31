@@ -47,7 +47,7 @@ class AccountCrudController extends AbstractCrudController
     {
         yield IdField::new('id')->onlyOnIndex();
         // Its book and its number are an account's identity: chosen when it is created, shown afterwards.
-        yield AssociationField::new('book', 'Livre')->setColumns(3)->setDisabled(Crud::PAGE_EDIT === $pageName);
+        yield $this->bookField()->setColumns(3)->setDisabled(Crud::PAGE_EDIT === $pageName);
         yield TextField::new('number', 'Numéro')->setColumns(3)->setDisabled(Crud::PAGE_EDIT === $pageName);
         yield TextField::new('label', 'Intitulé')->setColumns(6);
         yield TextField::new('type', 'Nature')->setColumns(3)

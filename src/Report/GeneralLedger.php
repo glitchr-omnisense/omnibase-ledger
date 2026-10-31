@@ -2,23 +2,58 @@
 
 namespace Base\Ledger\Report;
 
+use Base\Ledger\Dimension\Dimensions;
 use Base\Ledger\Entity\Book;
 use Base\Ledger\Entity\EntryLine;
 use Base\Ledger\Repository\EntryLineRepository;
 
-/** The grand livre: every line of every account over a period, with the running balance and the account's totals. */
+/**
+ * The grand livre: every line of every account over a period, with the
+ * running balance and the account's totals - maybe only the lines carrying
+ * some dimensions (['unit' => '12']), or per value of an axis.
+ */
 class GeneralLedger
 {
-    public function __construct(private readonly EntryLineRepository $lines)
+    public function __construct(private readonly EntryLineRepository $lines, private readonly ?Dimensions $dimensions = null)
     {
     }
 
     /**
+     * @param array<string, string|int> $dimensions only the lines carrying each axis => value
+     *
      * @return list<array{number: string, label: string, lines: list<array{date: \DateTimeImmutable, journal: string, number: ?string, piece: ?string, label: string, party: ?string, debit: int, credit: int, balance: int, letter: ?string}>, debit: int, credit: int, balance: int}>
      */
-    public function compute(Book $book, ?\DateTimeImmutable $from = null, ?\DateTimeImmutable $to = null, ?string $accountPrefix = null): array
+    public function compute(Book $book, ?\DateTimeImmutable $from = null, ?\DateTimeImmutable $to = null, ?string $accountPrefix = null, array $dimensions = []): array
     {
-        return self::fromLines($this->lines->forLedger($book, $from, $to, $accountPrefix));
+        return self::fromLines($this->lines->forLedger($book, $from, $to, $accountPrefix, $dimensions));
+    }
+
+    /**
+     * The grand livre per value of $axis: its accounts as compute() gives
+     * them, the values named by the labelers, the lines without the axis
+     * last (value null).
+     *
+     * @param array<string, string|int> $dimensions
+     *
+     * @return list<array{value: ?string, label: ?string, accounts: list<array>}>
+     */
+    public function byDimension(Book $book, ?\DateTimeImmutable $from, ?\DateTimeImmutable $to, string $axis, ?string $accountPrefix = null, array $dimensions = []): array
+    {
+        $byValue = [];
+        foreach ($this->lines->forLedger($book, $from, $to, $accountPrefix, $dimensions, true) as $line) {
+            $byValue[$line->getDimension($axis) ?? ''][] = $line;
+        }
+        $values = array_values(array_filter(array_map('strval', array_keys($byValue)), fn (string $value) => '' !== $value));
+        $labels = $this->dimensions?->labels($axis, $values) ?? array_combine($values, $values);
+
+        $groups = [];
+        foreach ($byValue as $value => $lines) {
+            $value = (string) $value;
+            $groups[] = ['value' => '' === $value ? null : $value, 'label' => '' === $value ? null : ($labels[$value] ?? $value), 'accounts' => self::fromLines($lines)];
+        }
+        usort($groups, fn (array $a, array $b) => [null === $a['value'], (string) $a['label']] <=> [null === $b['value'], (string) $b['label']]);
+
+        return $groups;
     }
 
     /** @param iterable<EntryLine> $lines by account then date */

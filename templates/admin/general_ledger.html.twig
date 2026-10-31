@@ -17,7 +17,10 @@
 <div class="ledger">
     {{ include('@Ledger/admin/_report_nav.html.twig', {current: 'ledger_admin_general_ledger'}) }}
     {{ include('@Ledger/admin/_period.html.twig', {extra: '<label>' ~ ('report.account'|trans({}, 'ledger')) ~ '<input class="form-control" name="account" value="' ~ (prefix|e('html_attr')) ~ '" placeholder="411"></label>'}) }}
-    {% for account in accounts %}
+    {{ include('@Ledger/admin/_dimension_filter.html.twig', {current: 'ledger_admin_general_ledger', link: {book: book.id, from: from|date('Y-m-d'), to: to|date('Y-m-d'), account: prefix, by: by|default(null)}}) }}
+    {% for group in groups ?? [{value: null, label: null, accounts: accounts}] %}
+    {% if by|default(null) %}<h2 class="h5">{{ include('@Ledger/admin/_axis.html.twig', {axis: by}) }} : {{ group.label ?? ('report.unassigned'|trans({}, 'ledger')) }}</h2>{% endif %}
+    {% for account in group.accounts %}
     <div class="card">
         <strong>{{ account.number }} {{ account.label }}</strong>
         <table>
@@ -36,6 +39,7 @@
     </div>
     {% else %}
     <div class="card muted">{{ 'report.empty'|trans({}, 'ledger') }}</div>
+    {% endfor %}
     {% endfor %}
 </div>
 {% endblock %}

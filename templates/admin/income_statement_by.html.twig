@@ -1,0 +1,57 @@
+{% extends '@Admin/layout.html.twig' %}
+
+{% block page_title %}{{ 'report.income_statement'|trans({}, 'ledger') }} · {{ book.name }}{% endblock %}
+
+{% block content_header %}
+<div class="admin-header">
+    <span class="admin-header-icon"><i class="fa-solid fa-chart-line"></i></span>
+    <div class="admin-header-titles">
+        <h1>{{ 'report.income_statement'|trans({}, 'ledger') }} · {{ book.name }}</h1>
+        <div class="admin-header-subtitle">{{ 'report.period'|trans({from: from|date('d/m/Y'), to: to|date('d/m/Y')}, 'ledger') }} · {{ 'report.per_axis'|trans({axis: include('@Ledger/admin/_axis.html.twig', {axis: by})}, 'ledger') }}</div>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+{# The result per value of an axis (per unit, per owner): each row opens
+   the statement of that value alone. #}
+{{ include('@Ledger/admin/_style.html.twig') }}
+{% set link = {book: book.id, from: from|date('Y-m-d'), to: to|date('Y-m-d')} %}
+<div class="ledger">
+    {{ include('@Ledger/admin/_report_nav.html.twig', {current: 'ledger_admin_income_statement'}) }}
+    {{ include('@Ledger/admin/_period.html.twig') }}
+    {{ include('@Ledger/admin/_dimension_filter.html.twig', {current: 'ledger_admin_income_statement', link: link|merge({by: by})}) }}
+    <div class="toolbar no-print">
+        <button type="button" class="btn btn-sm btn-secondary" onclick="window.print()"><i class="fa-solid fa-print"></i> {{ 'report.print'|trans({}, 'ledger') }}</button>
+        <a class="btn btn-sm btn-secondary" href="{{ path('ledger_admin_income_statement', link|merge({by: by, dimension: filter, format: 'csv'})) }}"><i class="fa-solid fa-file-csv"></i> CSV</a>
+    </div>
+    <div class="card">
+        <table class="statement">
+            <thead><tr>
+                <th>{{ include('@Ledger/admin/_axis.html.twig', {axis: by}) }}</th>
+                <th class="num">{{ 'report.income'|trans({}, 'ledger') }}</th>
+                <th class="num">{{ 'report.expenses'|trans({}, 'ledger') }}</th>
+                <th class="num">{{ 'report.net_result'|trans({}, 'ledger') }}</th>
+            </tr></thead>
+            <tbody>
+            {% for group in report.groups %}
+                <tr>
+                    <td>{% if group.value is not null %}<a href="{{ path('ledger_admin_income_statement', link|merge({dimension: filter|merge({(by): group.value})})) }}">{{ group.label }}</a>{% else %}<span class="muted">{{ 'report.unassigned'|trans({}, 'ledger') }}</span>{% endif %}</td>
+                    <td class="num">{{ group.report.totals.income|ledger_amount ?: '0,00' }}</td>
+                    <td class="num">{{ group.report.totals.expenses|ledger_amount ?: '0,00' }}</td>
+                    <td class="num {{ group.report.totals.result >= 0 ? 'in' : 'out' }}">{{ group.report.totals.result|ledger_amount ?: '0,00' }}</td>
+                </tr>
+            {% else %}
+                <tr><td colspan="4" class="muted">{{ 'report.empty'|trans({}, 'ledger') }}</td></tr>
+            {% endfor %}
+            </tbody>
+            <tfoot><tr>
+                <th>{{ 'report.total'|trans({}, 'ledger') }}</th>
+                <th class="num">{{ report.totals.income|ledger_amount ?: '0,00' }}</th>
+                <th class="num">{{ report.totals.expenses|ledger_amount ?: '0,00' }}</th>
+                <th class="num {{ report.totals.result >= 0 ? 'in' : 'out' }}">{{ report.totals.result|ledger_money(book.currency) }}</th>
+            </tr></tfoot>
+        </table>
+    </div>
+</div>
+{% endblock %}

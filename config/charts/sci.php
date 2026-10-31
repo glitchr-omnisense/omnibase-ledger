@@ -1,6 +1,7 @@
 <?php
 
 use Base\Ledger\Enum\AccountType as T;
+use Base\Ledger\Enum\TaxKind as K;
 
 /*
  * The plan comptable général (PCG) accounts a French real-estate SCI uses:
@@ -10,7 +11,11 @@ use Base\Ledger\Enum\AccountType as T;
  * from it to 512, fees from it to 6278). Tenants, suppliers and associates
  * get their own auxiliary accounts under 411, 401 and 455 (Parties).
  *
- * number => [label, type]
+ * accounts: number => [label, type]
+ * taxes: the French VAT codes, code => [label, rate in basis points, kind,
+ * account, deductible account (a reverse charge's)] - V for sales, A for
+ * purchases, I for fixed assets, EXO exempt, AIC an intra-EU acquisition.
+ * A book outside VAT (VatRegime::NONE, an SCI's default) has them unused.
  */
 return [
     'accounts' => [
@@ -45,8 +50,11 @@ return [
         '416' => ['Clients douteux ou litigieux', T::ASSET],
         '418' => ['Clients - produits non encore facturés', T::ASSET],
         '419' => ['Clients créditeurs (avances et trop-perçus)', T::LIABILITY],
+        '4452' => ['TVA due intracommunautaire', T::LIABILITY],
         '44551' => ['TVA à décaisser', T::LIABILITY],
+        '44562' => ['TVA déductible sur immobilisations', T::ASSET],
         '44566' => ['TVA déductible sur autres biens et services', T::ASSET],
+        '44567' => ['Crédit de TVA à reporter', T::ASSET],
         '44571' => ['TVA collectée', T::LIABILITY],
         '455' => ['Associés - comptes courants', T::LIABILITY],
         '4551' => ['Associés - apports en compte courant', T::LIABILITY],
@@ -105,5 +113,18 @@ return [
         'AC' => 'Achats',
         'OD' => 'Opérations diverses',
         'AN' => 'À-nouveaux',
+    ],
+    'taxes' => [
+        'V20' => ['TVA collectée 20 %', 2000, K::COLLECTED, '44571', null],
+        'V10' => ['TVA collectée 10 %', 1000, K::COLLECTED, '44571', null],
+        'V55' => ['TVA collectée 5,5 %', 550, K::COLLECTED, '44571', null],
+        'V21' => ['TVA collectée 2,1 %', 210, K::COLLECTED, '44571', null],
+        'A20' => ['TVA déductible 20 %', 2000, K::DEDUCTIBLE, '44566', null],
+        'A10' => ['TVA déductible 10 %', 1000, K::DEDUCTIBLE, '44566', null],
+        'A55' => ['TVA déductible 5,5 %', 550, K::DEDUCTIBLE, '44566', null],
+        'A21' => ['TVA déductible 2,1 %', 210, K::DEDUCTIBLE, '44566', null],
+        'I20' => ['TVA déductible sur immobilisations 20 %', 2000, K::DEDUCTIBLE_ASSETS, '44562', null],
+        'EXO' => ['Exonéré', 0, K::EXEMPT, null, null],
+        'AIC20' => ['Acquisition intracommunautaire 20 % (autoliquidée)', 2000, K::REVERSE_CHARGE, '4452', '44566'],
     ],
 ];
