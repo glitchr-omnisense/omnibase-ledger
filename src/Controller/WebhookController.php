@@ -4,6 +4,7 @@ namespace Base\Ledger\Controller;
 
 use Base\Ledger\Bank\Connections;
 use Base\Ledger\Bank\Sync;
+use Base\Ledger\Bank\Webhooks;
 use Base\Ledger\Enum\ConsentState;
 use Base\Ledger\Exception\LedgerException;
 use Base\Ledger\Reconciliation\Reconciler;
@@ -28,6 +29,7 @@ class WebhookController extends AbstractController
         private readonly Sync $sync,
         private readonly Reconciler $reconciler,
         private readonly EntityManagerInterface $entityManager,
+        private readonly ?Webhooks $webhooks = null,
     ) {
     }
 
@@ -39,7 +41,7 @@ class WebhookController extends AbstractController
         }
 
         try {
-            $notification = $this->connections->gateway($gateway)->notify($request->getContent(), $request->headers->all());
+            $notification = ($this->webhooks?->notifier($gateway) ?? $this->connections->gateway($gateway))->notify($request->getContent(), $request->headers->all());
         } catch (InvalidNotificationException $e) {
             return new Response($e->getMessage(), Response::HTTP_BAD_REQUEST);
         }

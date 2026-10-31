@@ -54,6 +54,8 @@ return function (ContainerConfigurator $configurator) {
     if (class_exists('Omnibank\\Registry')) {
         $services->get('Base\\Ledger\\Bank\\Connections')
             ->arg('$registry', service('Omnibank\\Registry')->nullOnInvalid());
+        $services->get('Base\\Ledger\\Bank\\Webhooks')
+            ->arg('$registry', service('Omnibank\\Registry')->nullOnInvalid());
     }
 
     if (class_exists('Base\\Admin\\Controller\\AbstractCrudController') && is_dir($src.'/Controller/Admin')) {

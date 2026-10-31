@@ -50,6 +50,7 @@ Without the omnibank mount, 12 bank tests skip (111 tests, 12 skipped).
 | `Reconciliation/MatcherTest` | a reference in the label, a reference with another amount, the counterparty's IBAN, the oldest of equal items, a party's name, one transfer for several items, all of a party's items, a supplier, ambiguous amounts and IBANs, a rule, a Stripe payout through its rule |
 | `Reconciliation/ReconcilerTest` | a payment posted and lettered with its notice, a supplier payment, a loan instalment split, a Stripe payout, a partial payment, nothing to post against, automatic reconciliation, undo (and in the locked period), ignored lines, splits adding up |
 | `Bank/ConnectionsTest` | the sealed state, other secrets, the webhook's connection, no Omnibank |
+| `Bank/WebhooksTest` | a gateway that can registers its webhook once, its secret sealed, kept, replaced; the others left alone; nothing on a local host or over a configured secret; the webhook checked with the secret registered |
 | `Bank/ImporterTest`, `Bank/SyncTest`, `Bank/StatementUploadTest` | each transaction once, the overlap, consent to renew, statements of another account, CSV files |
 | `Report/ReportsTest`, `Report/StatementsTest` | trial balance, general ledger, open items, compte de résultat and bilan with N-1 |
 | `Export/FecWriterTest` | the 18 columns, auxiliary accounts, amounts, the file name |

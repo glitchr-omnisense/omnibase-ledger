@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Added
+- The bank aggregators' webhooks registered by the application where the provider allows it:
+  `ledger:bank:webhook [<gateway>] [--force]` (`Bank\Webhooks::ensure()`), through omnibank's
+  optional `RegisterWebhook`, the secret sealed in omnibase's settings
+  (`api.webhook.ledger_bank_webhook.<gateway>.secret`), read by the webhook (`Webhooks::notifier()`;
+  a configured `webhook_secret` wins). Idempotent, exit 0 always, nothing asked on a host no
+  provider reaches. No aggregator supports it today (Powens, Bridge: console only); the command
+  says so. `docs/usage-bank.md`.
+
 ### Changed
 - The bank cards, `ledger_bank` and `ledger_books` take omnibase/admin's dashboard card: the title above
   the white panel, tinted rows that alternate, labels in the text face instead of small capitals

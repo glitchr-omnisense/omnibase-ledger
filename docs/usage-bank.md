@@ -205,6 +205,19 @@ carrying a consent updates the connection's status and expiry and the sealed sta
 unless the connection needs renewal, each account is synced and reconciled automatically
 (errors stay in `lastError`; the provider gets its 2xx).
 
+**Registered by the application, where the provider allows it.** `ledger:bank:webhook [<gateway>]
+[--force]` (`Bank\Webhooks::ensure()`), run at each deploy, registers each configured gateway's
+webhook on the address the router builds for `ledger_bank_webhook` outside a request, through
+omnibank's optional `RegisterWebhook`, and keeps the secret the provider answers in omnibase's
+settings, sealed by its `#[Vault]`: `api.webhook.ledger_bank_webhook.<gateway>.secret` (with
+`.id`, `.url`). The webhook checks a call with it (`Webhooks::notifier()`: `Registry::create($gateway,
+['webhook_secret' => ...])`); a configured `webhook_secret` wins. Idempotent, exit 0 always; on an
+address no provider reaches (`localhost`, `*.local`, `*.test`, a private IP, HTTP) it registers
+nothing and says that `ledger:bank:sync` covers it. **No aggregator supports it today**: Powens
+documents no API for it (its configuration routes take a console-only token) and Bridge sets
+webhooks in its dashboard, so the command says so for each - their webhook stays optional, set in
+their console if wanted.
+
 ## The sealed state
 
 `Base\Ledger\Security\StateCipher` seals a connection's state (the provider's tokens, its
