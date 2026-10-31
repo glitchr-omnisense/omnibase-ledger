@@ -17,7 +17,7 @@
             <span class="ld-swatch"></span>
             <span class="ld-name">{{ ('dashboard.kind.' ~ kind.kind.value)|trans({}, 'ledger') }}</span>
             <span class="ld-pct">{{ kind.share|round }} %</span>
-            <span class="ld-n" title="{{ kind.balance|ledger_money(currency) }}">{{ kind.count }} · {{ kind.balance|ledger_compact(currency) }}</span>
+            <span class="ld-n" title="{{ kind.balance|ledger_money(currency) }}">{{ 'dashboard.accounts_count'|trans({count: kind.count}, 'ledger') }} · {{ kind.balance|ledger_compact(currency) }}</span>
         </li>
         {% endfor %}
     </ul>

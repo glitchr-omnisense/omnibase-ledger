@@ -39,6 +39,7 @@ Ids are digits; `{gateway}` is `[a-z0-9_-]+`; `{year}` four digits. "View" and "
 |---|---|---|
 | `ledger:chart:seed` | `book` (id, SIREN or name); `--chart=` (a file of `config/charts/`, default `ledger.chart`) | adds the chart's missing accounts and journals |
 | `ledger:bank:sync` | `[book]`; `--no-reconcile` | syncs every API-fed bank account (all books, or one) and reconciles what is sure; `files` accounts are skipped; fails (exit 1) when an account failed, each reported as a warning |
+| `ledger:bank:opening` | `[book]`; `--adjust`; `--reclassify` | posts the opening entry of every bank account that has none (so the books hold the bank's balance); `--adjust` replaces one the bank no longer agrees with; `--reclassify` first moves each account onto the ledger account its kind belongs under (a loan on 164x) |
 | `ledger:bank:aggregate` | `[book]` | writes every bank account's precomputed rows again (all books, or one), one line per account: how many days, category rows, counterparty rows and recurring flows |
 | `ledger:fec:export` | `book`, `year` (the year the fiscal year closes in); `--dir=` / `-d` (`.`); `--stdout` | writes `<SIREN>FEC<YYYYMMDD>.txt`, or prints it; a year that is not digits is exit 2 |
 
@@ -56,6 +57,9 @@ An unknown book is an error and exit 1. `ledger:bank:sync` prints one line per a
 | `ledger_iban` | `{{ iban\|ledger_iban }}` | `FR76 •••• 4321` |
 | `ledger_compact(currency = 'EUR', locale = null)` | `{{ 1250000\|ledger_compact }}` | `12,5 k€` (a chart's axis, a tile) |
 | `ledger_month(locale = null)` | `{{ day\|ledger_month }}` | `oct.` |
+| `ledger_number(decimals = 0, locale = null)` | `{{ -5.7\|ledger_number(1) }}` | `-5,7` |
+
+Every filter takes the page's language (the translator's locale) when it is given none.
 
 The function `ledger_once(key)` is true the first time it is asked in a request only (the bank
 cards' shared style, written once).

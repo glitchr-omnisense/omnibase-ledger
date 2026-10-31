@@ -96,6 +96,8 @@ return [
         '771' => ['Produits exceptionnels sur opérations de gestion', T::INCOME],
         '781' => ['Reprises sur amortissements, dépréciations et provisions', T::INCOME],
         '791' => ['Transferts de charges d\'exploitation', T::INCOME],
+        // Classe 8 - comptes spéciaux: what a bank account's opening entry is balanced against
+        '890' => ['Bilan d\'ouverture', T::EQUITY],
     ],
     'journals' => [
         'BQ' => 'Banque',

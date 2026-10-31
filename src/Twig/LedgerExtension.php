@@ -4,6 +4,7 @@ namespace Base\Ledger\Twig;
 
 use Base\Ledger\Entity\BankAccount;
 use Symfony\Contracts\Service\ResetInterface;
+use Symfony\Contracts\Translation\TranslatorInterface;
 use Twig\Attribute\AsTwigFilter;
 use Twig\Attribute\AsTwigFunction;
 
@@ -15,11 +16,25 @@ use Twig\Attribute\AsTwigFunction;
  * {{ day|ledger_month }} → oct. (the locale's short month);
  * {% if ledger_once('bank-style') %} → true the first time in a request
  * only (a style shared by several cards, written once).
+ *
+ * Amounts, numbers and months take the page's language - the translator's
+ * locale, the one its labels are in -, not intl's default, which a host may
+ * not keep in step with it.
  */
 final class LedgerExtension implements ResetInterface
 {
     /** @var array<string, true> */
     private array $once = [];
+
+    public function __construct(private readonly ?TranslatorInterface $translator = null)
+    {
+    }
+
+    /** $locale, else the page's (the translator's), else intl's default. */
+    public function locale(?string $locale = null): string
+    {
+        return $locale ?? (null !== $this->translator && method_exists($this->translator, 'getLocale') ? $this->translator->getLocale() : null) ?? \Locale::getDefault();
+    }
 
     #[AsTwigFunction('ledger_once')]
     public function once(string $key): bool
@@ -40,7 +55,7 @@ final class LedgerExtension implements ResetInterface
     public function compact(int|string|null $minor, ?string $currency = 'EUR', ?string $locale = null): string
     {
         $value = ((int) $minor) / 100;
-        $locale ??= \Locale::getDefault();
+        $locale = $this->locale($locale);
         [$divided, $suffix] = match (true) {
             abs($value) >= 1_000_000 => [$value / 1_000_000, ' M'],
             abs($value) >= 10_000 => [$value / 1_000, ' k'],
@@ -62,11 +77,26 @@ final class LedgerExtension implements ResetInterface
         return trim($text.$suffix.('' !== $suffix ? '' : ' ').$symbol);
     }
 
+    /** {{ -5.7|ledger_number(1) }} → -5,7 in French: a number in the page's language. */
+    #[AsTwigFilter('ledger_number')]
+    public function number(int|float|null $value, int $decimals = 0, ?string $locale = null): string
+    {
+        if (class_exists(\NumberFormatter::class)) {
+            $formatter = new \NumberFormatter($this->locale($locale), \NumberFormatter::DECIMAL);
+            $formatter->setAttribute(\NumberFormatter::MIN_FRACTION_DIGITS, 0);
+            $formatter->setAttribute(\NumberFormatter::MAX_FRACTION_DIGITS, $decimals);
+
+            return (string) $formatter->format((float) $value);
+        }
+
+        return number_format((float) $value, $decimals, ',', ' ');
+    }
+
     #[AsTwigFilter('ledger_month')]
     public function month(\DateTimeInterface $date, ?string $locale = null): string
     {
         if (class_exists(\IntlDateFormatter::class)) {
-            $formatted = (new \IntlDateFormatter($locale ?? \Locale::getDefault(), \IntlDateFormatter::NONE, \IntlDateFormatter::NONE, null, null, 'MMM'))->format($date);
+            $formatted = (new \IntlDateFormatter($this->locale($locale), \IntlDateFormatter::NONE, \IntlDateFormatter::NONE, null, null, 'MMM'))->format($date);
             if (false !== $formatted) {
                 return $formatted;
             }
@@ -79,7 +109,7 @@ final class LedgerExtension implements ResetInterface
     {
         $value = ((int) $minor) / 100;
         if (class_exists(\NumberFormatter::class)) {
-            $formatted = (new \NumberFormatter($locale ?? \Locale::getDefault(), \NumberFormatter::CURRENCY))->formatCurrency($value, $currency);
+            $formatted = (new \NumberFormatter($this->locale($locale), \NumberFormatter::CURRENCY))->formatCurrency($value, $currency);
             if (false !== $formatted) {
                 return $formatted;
             }

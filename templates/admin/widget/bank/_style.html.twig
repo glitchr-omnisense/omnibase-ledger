@@ -36,6 +36,7 @@
 
     /* donut */
     .ld-donut-wrap { display: grid; grid-template-columns: minmax(7rem, 9rem) minmax(0, 1fr); gap: 1.1rem; align-items: center; }
+    .ld-balance-total.ld-more { margin-top: 1rem; padding-top: .8rem; border-top: 1px solid var(--admin-border); }
     .ld-balance-split { margin-top: .8rem; padding-top: .7rem; border-top: 1px solid var(--admin-border); }
     .ld-balance-split .ld-value { font-size: 1.05rem; }
     .ld-donut { width: 100%; height: auto; display: block; }
@@ -46,10 +47,11 @@
     .ld-donut-n { font-size: .55rem; font-weight: 700; fill: var(--admin-text); text-anchor: middle; }
     .ld-donut-l { font-size: .22rem; fill: var(--admin-muted); text-anchor: middle; text-transform: uppercase; letter-spacing: .02em; }
     .ld-legend { list-style: none; margin: 0; padding: 0; display: grid; gap: .3rem; font-size: .82rem; min-width: 0; }
-    .ld-legend li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; gap: .5rem; align-items: center; }
-    .ld-legend .ld-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .ld-legend li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; column-gap: .5rem; row-gap: .05rem; align-items: baseline; }
+    .ld-legend .ld-swatch { align-self: center; }
+    .ld-legend .ld-name { white-space: normal; line-height: 1.25; }
     .ld-legend .ld-pct { font-weight: 600; }
-    .ld-legend .ld-n { color: var(--admin-muted); min-width: 4.5rem; text-align: right; }
+    .ld-legend .ld-n { grid-column: 2 / -1; color: var(--admin-muted); font-size: .74rem; }
 
     /* stacked bar */
     .ld-stack { display: flex; gap: 2px; height: .8rem; border-radius: 4px; overflow: hidden; background: var(--ld-grid); margin: .4rem 0 .8rem; }
@@ -78,6 +80,11 @@
     .ld-amount { text-align: right; white-space: nowrap; font-weight: 600; }
     .ld-meter { grid-column: 1 / -1; height: 4px; border-radius: 2px; background: var(--ld-grid); overflow: hidden; }
     .ld-meter span { display: block; height: 100%; background: var(--c, var(--ld-s1)); border-radius: 2px; }
+    .ld-actions { display: inline-flex; align-items: center; gap: .35rem; justify-content: flex-end; }
+    .ld-inline { display: inline; margin: 0; }
+    .ld-icon-btn { border: 0; background: transparent; color: var(--admin-muted); cursor: pointer; padding: .15rem .3rem; border-radius: 5px; font-size: .8rem; }
+    .ld-icon-btn:hover, .ld-icon-btn:focus-visible { color: var(--admin-danger); background: var(--ld-grid); }
+    .ld-abandoned .ld-main strong { color: var(--admin-muted); }
     .ld-pill { display: inline-block; padding: .05rem .45rem; border-radius: 999px; font-size: .7rem; background: var(--ld-grid); color: var(--admin-text); white-space: nowrap; }
     .ld-pill.is-alert { background: color-mix(in srgb, var(--admin-danger) 16%, transparent); color: var(--admin-danger); }
     .ld-pill.is-wait { background: color-mix(in srgb, var(--admin-warning) 18%, transparent); color: var(--admin-text); }
@@ -131,6 +138,12 @@
     .ld-col:hover::before, .ld-col:focus-visible::before { opacity: .05; }
     .ld-bar { position: relative; flex: 1 1 0; max-width: 1.1rem; min-height: 1px; border-radius: 4px 4px 0 0; background: var(--c); }
     .ld-bar-in { --c: var(--ld-s1); } .ld-bar-out { --c: var(--ld-s2); }
+    /* A bar past the scale: cut by a surface-coloured zigzag near its top, its value above it. */
+    .ld-bar.is-clipped { background: linear-gradient(to bottom, var(--c) 0 .35rem, transparent .35rem .62rem, var(--c) .62rem); }
+    .ld-bar.is-clipped::after { content: ""; position: absolute; left: -2px; right: -2px; top: .3rem; height: .38rem; background: repeating-linear-gradient(135deg, var(--admin-surface) 0 2px, transparent 2px 4px); }
+    .ld-clip-value { position: absolute; bottom: calc(8.6rem + .3rem); left: 50%; z-index: 1; transform: translateX(-50%); font-style: normal; font-size: .62rem; font-weight: 600; color: var(--admin-text); white-space: nowrap; background: var(--admin-surface); padding: 0 .15rem; border-radius: 3px; }
+    .ld-clip-note { margin: .45rem 0 0; font-size: .72rem; color: var(--admin-muted); display: flex; align-items: center; gap: .4rem; }
+    .ld-clip-mark { display: inline-block; width: .7rem; height: .7rem; border-radius: 2px; background: repeating-linear-gradient(135deg, var(--admin-muted) 0 2px, transparent 2px 4px); }
     .ld-dot { position: absolute; left: 50%; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; background: var(--ld-s3); box-shadow: 0 0 0 2px var(--admin-surface); opacity: 0; }
     .ld-col:hover .ld-dot, .ld-col:focus-visible .ld-dot { opacity: 1; }
     .ld-tip { position: absolute; z-index: 5; bottom: calc(100% - 3.4rem); left: 50%; transform: translateX(-50%); min-width: 10.5rem; padding: .5rem .6rem; border-radius: 6px; background: var(--admin-surface); border: 1px solid var(--admin-border); box-shadow: 0 6px 18px rgba(0, 0, 0, .14); font-size: .76rem; display: none; pointer-events: none; text-align: left; }

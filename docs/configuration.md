@@ -82,3 +82,8 @@ Autoconfiguration the bundle relies on:
 
 Optional collaborators: `Symfony\Component\Lock\LockFactory` (`Posting`, numbering under a
 lock), `EventDispatcherInterface` (`Reconciler`, the `BankLineReconciled` event).
+
+`ledger.bank.opening_account` (`890`) and `ledger.bank.opening_journal` (`AN`): the account and the
+journal a bank account's opening entry is posted against and in ([Bank feeds](usage-bank.md#the-opening-entry)),
+created when the book has none.
+

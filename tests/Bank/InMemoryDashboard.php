@@ -44,6 +44,8 @@ abstract class InMemoryDashboard extends InMemoryLedger
     protected array $recurringFlows = [];
     /** @var list<BankConnection> */
     protected array $connectionsList = [];
+    /** The current account's lines, as folded. */
+    protected array $checkingLines = [];
 
     protected function today(): \DateTimeImmutable
     {
@@ -66,7 +68,11 @@ abstract class InMemoryDashboard extends InMemoryLedger
         $loan = self::withId(new BankAccount($cmConnection, 'P1', 'Prêt immobilier', $this->account('5123', 'Banque - Prêt'), $this->journals['BQ']), 3);
         $loan->setKind(AccountKind::LOAN)->setBankBalance(-16900000, $this->today()->modify('-20 days'));
         $this->bankAccounts = [$checking, $livret, $loan];
-        $this->connectionsList = [$checking->getConnection(), $cmConnection];
+        // Two Powens pages never finished: one left three days ago (abandoned), one just opened.
+        $abandoned = self::withId(new BankConnection($this->book, 'powens', 'Powens'), 3);
+        (new \ReflectionProperty($abandoned, 'createdAt'))->setValue($abandoned, $this->today()->modify('-3 days'));
+        $opened = self::withId(new BankConnection($this->book, 'powens', 'Powens'), 4);
+        $this->connectionsList = [$checking->getConnection(), $cmConnection, $abandoned, $opened];
 
         $lines = [];
         for ($m = 11; $m >= 0; --$m) {
@@ -87,6 +93,7 @@ abstract class InMemoryDashboard extends InMemoryLedger
         foreach ([9, 8, 7, 6] as $ago) {
             $lines[] = $this->line(-29_99, 'CB OLD SOFTWARE', null, null, TransactionCategory::SUBSCRIPTIONS, $this->today()->modify('first day of this month')->modify("-$ago months +19 days"));
         }
+        $this->checkingLines = $lines;
         $this->fold($checking, $lines);
     }
 
@@ -103,10 +110,11 @@ abstract class InMemoryDashboard extends InMemoryLedger
     protected function fold(BankAccount $account, array $lines): void
     {
         $rows = Aggregator::compute($account, $lines, $this->today());
-        $this->days = [...array_filter($this->days, static fn ($r) => $r->getBankAccount() !== $account), ...$rows['days']];
-        $this->dayCategories = [...$this->dayCategories, ...$rows['categories']];
-        $this->counterpartyMonths = [...$this->counterpartyMonths, ...$rows['counterparties']];
-        $this->recurringFlows = [...$this->recurringFlows, ...$rows['recurring']];
+        $others = static fn (array $rows) => array_filter($rows, static fn ($r) => $r->getBankAccount() !== $account);
+        $this->days = [...$others($this->days), ...$rows['days']];
+        $this->dayCategories = [...$others($this->dayCategories), ...$rows['categories']];
+        $this->counterpartyMonths = [...$others($this->counterpartyMonths), ...$rows['counterparties']];
+        $this->recurringFlows = [...$others($this->recurringFlows), ...$rows['recurring']];
     }
 
     protected function dashboard(): Dashboard

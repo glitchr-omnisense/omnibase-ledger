@@ -37,16 +37,7 @@ final class RecurringWidgetType extends AbstractBankWidgetType
     protected function data(array $accounts, ?array $period, array $params): array
     {
         // A transfer between two of the accounts shown comes back on both, once each way: neither is a flow of the company.
-        $all = $this->dashboard->recurring($accounts);
-        $flows = array_values(array_filter($all, static function ($flow) use ($all): bool {
-            foreach ($all as $other) {
-                if ($other !== $flow && $other->getBankAccount() !== $flow->getBankAccount() && $other->getAmount() === -$flow->getAmount() && $other->getRhythm() === $flow->getRhythm() && abs($other->getNextOn()->getTimestamp() - $flow->getNextOn()->getTimestamp()) <= 3 * 86400) {
-                    return false;
-                }
-            }
-
-            return true;
-        }));
+        $flows = $this->dashboard->recurring($accounts, true);
         $monthly = 0;
         foreach ($flows as $flow) {
             $monthly += (int) round($flow->getAmount() * match ($flow->getRhythm()) {

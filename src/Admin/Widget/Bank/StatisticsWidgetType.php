@@ -44,15 +44,22 @@ final class StatisticsWidgetType extends AbstractBankWidgetType
         foreach (array_keys(Dashboard::PERIODS) as $key) {
             $p = Dashboard::period($key);
             $buckets = $this->dashboard->flows($accounts, $p);
-            $scale = Chart::scale(max([0, ...array_map(static fn ($b) => max($b['in'], $b['out']), $buckets)]));
+            // One heavy month (a term deposit opened) would flatten every other: the scale stops at the
+            // largest of the others, the towering bars are clipped and marked, their value in full.
+            $scale = Chart::scale(Chart::robustMax(array_map(static fn ($b) => max($b['in'], $b['out']), $buckets)) * 1.08);
+            $clipped = false;
             foreach ($buckets as $i => $bucket) {
                 $buckets[$i]['inHeight'] = Chart::percent($bucket['in'], $scale['max']);
                 $buckets[$i]['outHeight'] = Chart::percent($bucket['out'], $scale['max']);
+                $buckets[$i]['inClipped'] = $bucket['in'] > $scale['max'];
+                $buckets[$i]['outClipped'] = $bucket['out'] > $scale['max'];
+                $clipped = $clipped || $buckets[$i]['inClipped'] || $buckets[$i]['outClipped'];
             }
             $charts[$key] = [
                 'period' => $p,
                 'buckets' => $buckets,
                 'scale' => $scale,
+                'clipped' => $clipped,
                 'line' => Chart::line(array_map(static fn ($b) => $b['balance'], $buckets), 0.12, true),
                 'in' => array_sum(array_column($buckets, 'in')),
                 'out' => array_sum(array_column($buckets, 'out')),

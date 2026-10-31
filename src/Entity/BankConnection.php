@@ -113,6 +113,21 @@ class BankConnection
         return $this;
     }
 
+    /** How long a connection through a provider's page may stay unfinished before it counts as abandoned. */
+    public const ABANDONED_AFTER = '24 hours';
+
+    /** Started through a provider's page and never finished: no consent given, no account. Statement files have no page to finish. */
+    public function isUnfinished(): bool
+    {
+        return 'files' !== $this->gateway && ConsentState::NONE === $this->consentStatus && $this->accounts->isEmpty();
+    }
+
+    /** Unfinished for longer than ABANDONED_AFTER: the user left the provider's page; the connection can go. */
+    public function isAbandoned(?\DateTimeImmutable $now = null): bool
+    {
+        return $this->isUnfinished() && $this->createdAt <= ($now ?? new \DateTimeImmutable())->modify('-'.self::ABANDONED_AFTER);
+    }
+
     /** Whether the bank wants its consent given again (expired, or said so). */
     public function needsRenewal(?\DateTimeImmutable $now = null): bool
     {

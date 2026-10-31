@@ -70,6 +70,30 @@ final class Chart
         return ['max' => $steps * $step, 'ticks' => $ticks];
     }
 
+    /**
+     * The value a bar chart's scale should reach: the largest, unless one or
+     * two values tower over the rest (each more than $ratio times the next):
+     * then the largest of the others, so that a single heavy month does not
+     * flatten every other bar. The towering bars are drawn clipped at the
+     * top of the scale, marked, their value given in full.
+     *
+     * @param list<int|float> $values
+     */
+    public static function robustMax(array $values, float $ratio = 2.2, int $outliers = 2): int|float
+    {
+        rsort($values);
+        $values = array_values(array_filter($values, static fn ($v) => $v > 0));
+        if ([] === $values) {
+            return 0;
+        }
+        $i = 0;
+        while ($i < $outliers && isset($values[$i + 1]) && $values[$i] > $ratio * $values[$i + 1]) {
+            ++$i;
+        }
+
+        return $values[$i];
+    }
+
     /** $value as a percentage of $max, kept within 0..100. */
     public static function percent(int|float $value, int|float $max): float
     {

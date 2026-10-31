@@ -112,6 +112,51 @@ reads a CAMT.053, OFX or CSV file through the `files` gateway and imports its li
 - A statement that says what the account is (CAMT.053's `Acct/Tp`, OFX's `ACCTTYPE`) sets its
   kind; the connection's state becomes OK and the precomputed rows are written again.
 
+## The opening entry
+
+A connected account brings only its recent lines: what came before them is missing from the books.
+`Base\Ledger\Bank\Opening::open(BankAccount)` writes it once - the bank's balance less the lines
+imported up to the balance's date, dated the day before the first line (the balance's own day
+when there is none), on the bank account's ledger account against `ledger.bank.opening_account`
+(`890`, Bilan d'ouverture) in `ledger.bank.opening_journal` (`AN`, the à-nouveaux), validated,
+source `bank:opening:<id>`. Both are created when the book lacks them. A balance positive is a
+debit on the bank account, a negative one (a loan) a credit. Once its lines are reconciled, the
+account's ledger balance is the bank's; until then the difference is exactly the lines still to
+reconcile.
+
+It is written after the first sync or upload that brings a balance (a locked period leaves it to
+the command). `adjust()` replaces an opening the bank's balance no longer agrees with (older lines
+imported since, a corrected balance): reversed on its own date, posted again as
+`bank:opening:<id>/2`. For the accounts already there:
+
+```sh
+bin/console ledger:bank:opening [book] [--adjust] [--reclassify]
+```
+
+`890` should come back to zero once the book's own à-nouveaux agree with the banks: a balance left
+on it is the difference the accountant has to look at (a bank balance already carried in the
+à-nouveaux on 512, for instance).
+
+## Which ledger account
+
+`Connections::ledgerPrefix(AccountKind)`: a loan or a consumer credit posts under `164`
+(Emprunts auprès des établissements de crédit: `1641`, `1642`...), a revolving credit or overdraft
+line under `519` (Concours bancaires courants), every other account under `512` (`5121`...), each
+the first number of its prefix no bank account of the book uses yet, created when the chart does
+not have it. `Connections::reclassify(BankAccount, Posting)` moves an account attached before its
+kind was known (a loan on `512x`) onto its prefix: the former account's balance carried by an OD
+entry (`bank:reclass:<id>:<number>`), then the bank account posts on the new one
+(`ledger:bank:opening --reclassify` does it for every account).
+
+## A connection never finished
+
+A connection opened through a provider's page and left there has no consent and no account
+(`BankConnection::isUnfinished()`); after 24 hours it is abandoned (`isAbandoned()`): the connections
+card counts it no more, lists it apart, and offers to remove it - `POST
+/admin/ledger/bank/connection/{id}/remove` (`ledger_admin_bank_remove`, `LEDGER_MANAGE`, the
+token `ledger_bank_remove_<id>`), which `Connections::remove()` refuses for a connection that holds
+an account or a consent.
+
 ## What the dashboard reads
 
 The bank cards never read every line on a page load. `Base\Ledger\Bank\Aggregates::rebuild(BankAccount)`

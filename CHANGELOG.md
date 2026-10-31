@@ -3,6 +3,29 @@
 ## [Unreleased]
 
 ### Added
+- The opening entry (`Bank\Opening`): the bank's balance less the lines imported, the day before the
+  first line, on the bank account against 890 (Bilan d'ouverture) in AN, once per account
+  (`bank:opening:<id>`), after the first sync or upload that brings a balance; `adjust()` replaces a
+  stale one (reversal, then `/2`); `ledger:bank:opening [book] [--adjust] [--reclassify]` for the
+  accounts already there. Configuration `ledger.bank.opening_account`, `opening_journal`. The SCI chart
+  has 890; `AccountType::guess()` gives class 8 as equity and 519 as a liability.
+- A loan or a consumer credit posts under 164 (1641...), a revolving credit under 519, the rest under
+  512 (`Connections::ledgerPrefix()`, `ledgerAccount()`); `Connections::reclassify()` moves an account
+  attached before its kind was known, its balance carried by an OD entry.
+- A connection never finished (`BankConnection::isUnfinished()`, `isAbandoned()` after 24 hours): the
+  connections card counts the abandoned no more, lists them apart and offers their removal
+  (`ledger_admin_bank_remove`, POST with its token; `Connections::remove()`).
+- The statistics' towering bars are clipped (`Chart::robustMax()`), marked and labelled, so that the
+  other months stay readable.
+- `ledger_number`.
+
+### Changed
+- Amounts, numbers, months and percentages print in the page's language (the translator's locale), not
+  intl's default (`€7,704.99` on a French page); the bank accounts' list prints the bank balance so too.
+- The accounts-by-kind legend no longer cuts a kind's name ("Compte courant"): the count and what
+  they hold go on a line of their own.
+- The recurring flows and the forecast leave out a transfer between two of the accounts shown, both
+  ways (`Dashboard::recurring($accounts, true)`).
 - The bank dashboard: twelve omnibase/admin palette cards (`Admin\Widget\Bank\*WidgetType`,
   `ledger_bank_kinds`, `_balance`, `_connections`, `_transfers`, `_statistics`, `_categories`,
   `_counterparties`, `_recurring`, `_forecast`, `_reconciliation`, `_freshness`, `_movements`), each

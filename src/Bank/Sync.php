@@ -6,6 +6,7 @@ use Base\Ledger\Entity\BankAccount;
 use Base\Ledger\Entity\BankConnection;
 use Base\Ledger\Enum\ConsentState;
 use Base\Ledger\Exception\BankException;
+use Base\Ledger\Exception\LedgerException;
 use Doctrine\ORM\EntityManagerInterface;
 use Omnibank\Model\Account as BankAccountModel;
 use Omnibank\Model\Connection;
@@ -28,6 +29,7 @@ class Sync
         private readonly Importer $importer,
         #[Autowire('%ledger.bank.sync_overlap_days%')] private readonly int $overlapDays = 5,
         private readonly ?Aggregates $aggregates = null,
+        private readonly ?Opening $opening = null,
     ) {
     }
 
@@ -84,6 +86,7 @@ class Sync
         // The gateway's own word for the access when it gives one with the account (Powens' error), else it went through.
         $connection->setConnectionState($model->state ?? ConnectionState::OK, $now);
         $this->entityManager->flush();
+        $this->openOnce($account);
         $this->aggregates?->rebuild($account);
 
         return $created;
@@ -101,6 +104,15 @@ class Sync
         }
 
         return $created;
+    }
+
+    /** The account's opening entry, the first time the bank gives a balance; a period the book locked leaves it to ledger:bank:opening. */
+    private function openOnce(BankAccount $account): void
+    {
+        try {
+            $this->opening?->open($account);
+        } catch (LedgerException) {
+        }
     }
 
     /** The gateway's own description of the account: what transactions() is asked with. */

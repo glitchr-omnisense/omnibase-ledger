@@ -145,6 +145,13 @@ yield MenuItem::block('ledger_bank_balance', 'Solde agrégé', 'fa-solid fa-sack
 yield MenuItem::block('ledger_bank_statistics', 'Statistiques générales', 'fa-solid fa-chart-column')->setSize(4)->setParams(['period' => '12m']);
 ```
 
+Amounts, numbers and months print in the page's language - the translator's locale, the one the
+labels are in (`LedgerExtension`), whatever intl's default. The statistics' bars stop at the largest
+of the others when one or two buckets tower over them (more than 2.2 times the next,
+`Chart::robustMax()`): those are cut by a zigzag near the top of the scale, their value written
+above, a note under the chart saying so - a heavy month (a term deposit opened) no longer flattens
+the eleven others; no logarithmic scale, which would misstate the bars' proportions.
+
 The charts are markup - inline SVG and CSS on omnibase/admin's tokens, light and dark - not
 Chart.js: admin's analytics cards draw with the line controller of omnisense/omnibase's
 `admin-charts` build only, a donut or bars would mean rebuilding that core's assets, and markup

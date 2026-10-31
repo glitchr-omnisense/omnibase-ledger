@@ -273,10 +273,32 @@ class Dashboard
         return ['in' => $side('in', 'inCount'), 'out' => $side('out', 'outCount')];
     }
 
-    /** @param list<BankAccount> $accounts @return list<BankRecurring> by next date */
-    public function recurring(array $accounts): array
+    /**
+     * The recurring flows of $accounts by next date; with $withoutMirrors, a
+     * transfer between two of them (it comes back on both, once each way: the
+     * monthly saving, a card's monthly debit) left out - neither is a flow of
+     * the company, and together they change nothing.
+     *
+     * @param list<BankAccount> $accounts
+     *
+     * @return list<BankRecurring>
+     */
+    public function recurring(array $accounts, bool $withoutMirrors = false): array
     {
-        return $this->recurring->forAccounts($accounts);
+        $all = $this->recurring->forAccounts($accounts);
+        if (!$withoutMirrors) {
+            return $all;
+        }
+
+        return array_values(array_filter($all, static function (BankRecurring $flow) use ($all): bool {
+            foreach ($all as $other) {
+                if ($other !== $flow && $other->getBankAccount() !== $flow->getBankAccount() && $other->getAmount() === -$flow->getAmount() && $other->getRhythm() === $flow->getRhythm() && abs($other->getNextOn()->getTimestamp() - $flow->getNextOn()->getTimestamp()) <= 3 * 86400) {
+                    return false;
+                }
+            }
+
+            return true;
+        }));
     }
 
     /**
@@ -296,7 +318,7 @@ class Dashboard
         $moves = [];
         $flows = 0;
         $upcoming = [];
-        foreach ($this->recurring($accounts) as $flow) {
+        foreach ($this->recurring($accounts, true) as $flow) {
             // A flow overdue within its tolerance is still expected: it counts from tomorrow.
             $first = true;
             foreach ($flow->occurrencesBetween($today->modify('-60 days'), $until) as $date) {
@@ -365,7 +387,7 @@ class Dashboard
      *
      * @param list<BankAccount> $accounts
      *
-     * @return array{groups: array<string, int>, total: int, connections: list<array{connection: \Base\Ledger\Entity\BankConnection, state: ConnectionState}>, renewals: list<\Base\Ledger\Entity\BankConnection>}
+     * @return array{groups: array<string, int>, total: int, connections: list<array{connection: \Base\Ledger\Entity\BankConnection, state: ConnectionState}>, renewals: list<\Base\Ledger\Entity\BankConnection>, abandoned: list<\Base\Ledger\Entity\BankConnection>}
      */
     public function connections(array $accounts, int $renewalDays = 30, ?\DateTimeImmutable $now = null, bool $withoutAccounts = false): array
     {
@@ -385,7 +407,14 @@ class Dashboard
         $groups = ['ok' => 0, 'action' => 0, 'unavailable' => 0, 'error' => 0];
         $rows = [];
         $renewals = [];
-        foreach ($seen as $connection) {
+        $abandoned = [];
+        foreach ($seen as $key => $connection) {
+            // Left on the provider's page for more than a day: apart, not counted, offered for removal.
+            if ($connection->isAbandoned($now)) {
+                $abandoned[] = $connection;
+                unset($seen[$key]);
+                continue;
+            }
             // A consent the bank wants renewed, or one never given through a provider's page, is the user's action, whatever the last sync said.
             $neverGiven = StatementUpload::GATEWAY !== $connection->getGateway() && ConsentState::NONE === $connection->getConsentStatus() && $connection->getAccounts()->isEmpty();
             $state = ($connection->needsRenewal($now) || $neverGiven) && !$connection->getConnectionState()->needsUser() ? ConnectionState::ACTION_NEEDED : $connection->getConnectionState();
@@ -397,7 +426,7 @@ class Dashboard
         }
         usort($rows, static fn ($a, $b) => [$a['state']->group() === 'ok', (string) $a['connection']] <=> [$b['state']->group() === 'ok', (string) $b['connection']]);
 
-        return ['groups' => $groups, 'total' => \count($seen), 'connections' => $rows, 'renewals' => $renewals];
+        return ['groups' => $groups, 'total' => \count($seen), 'connections' => $rows, 'renewals' => $renewals, 'abandoned' => $abandoned];
     }
 
     /**

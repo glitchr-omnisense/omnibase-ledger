@@ -44,9 +44,13 @@ enum AccountType: string
 
         return match ($number[0] ?? '') {
             '1' => str_starts_with($number, '10') || str_starts_with($number, '11') || str_starts_with($number, '12') || str_starts_with($number, '13') || str_starts_with($number, '14') ? self::EQUITY : self::LIABILITY,
-            '2', '3', '5' => self::ASSET,
+            '2', '3' => self::ASSET,
+            // 519 (Concours bancaires courants) is a debt; the rest of class 5 what the book holds.
+            '5' => str_starts_with($number, '519') ? self::LIABILITY : self::ASSET,
             '6' => self::EXPENSE,
             '7' => self::INCOME,
+            // Class 8, special accounts: 890 (Bilan d'ouverture) and 891 balance the opening and closing entries.
+            '8' => self::EQUITY,
             default => self::ASSET,
         };
     }

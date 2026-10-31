@@ -44,6 +44,16 @@ class DashboardTest extends InMemoryDashboard
 
         $connections = $dashboard->connections($this->bankAccounts);
         self::assertSame(['ok' => 1, 'action' => 1, 'unavailable' => 0, 'error' => 0], $connections['groups']);
+        self::assertSame([], $connections['abandoned'], 'with the accounts only, no unfinished connection');
+
+        $all = $dashboard->connections($this->bankAccounts, withoutAccounts: true);
+        self::assertSame(['ok' => 1, 'action' => 2, 'unavailable' => 0, 'error' => 0], $all['groups'], 'the page opened an hour ago waits for the user; the one left three days ago is not counted');
+        self::assertSame(3, $all['total']);
+        self::assertSame([3], array_map(static fn ($c) => $c->getId(), $all['abandoned']));
+        self::assertTrue($all['abandoned'][0]->isAbandoned());
+        self::assertFalse($this->connectionsList[3]->isAbandoned(), 'less than 24 hours');
+        self::assertTrue($this->connectionsList[3]->isUnfinished());
+        self::assertFalse($this->connectionsList[1]->isUnfinished(), 'a consent given, accounts');
         self::assertSame('Crédit Mutuel', (string) $connections['connections'][0]['connection'], 'the one to act on first');
 
         $state = $dashboard->reconciliation([$this->bankAccount()]);
@@ -54,6 +64,21 @@ class DashboardTest extends InMemoryDashboard
         self::assertSame(['Prêt immobilier', 'Livret A', 'Compte courant'], array_map(static fn ($r) => $r['account']->getName(), $fresh), 'stale first: never synced, then 10 days without a sync');
         self::assertTrue($fresh[1]['stale']);
         self::assertFalse(end($fresh)['stale']);
+    }
+
+    public function testOnlyAnUnfinishedConnectionIsRemoved(): void
+    {
+        $removed = [];
+        $em = $this->createStub(\Doctrine\ORM\EntityManagerInterface::class);
+        $em->method('remove')->willReturnCallback(function (object $entity) use (&$removed): void { $removed[] = $entity; });
+        $connections = new \Base\Ledger\Bank\Connections($em, new \Base\Ledger\Security\StateCipher('s'), $this->accountRepository(), $this->journalRepository(),
+            $this->createStub(\Base\Ledger\Repository\BankAccountRepository::class), $this->createStub(\Base\Ledger\Repository\BankConnectionRepository::class));
+
+        $connections->remove($this->connectionsList[2]);
+        self::assertSame([$this->connectionsList[2]], $removed);
+
+        $this->expectException(\Base\Ledger\Exception\BankException::class);
+        $connections->remove($this->bankAccount()->getConnection());
     }
 
     public function testCategoriesCounterpartiesTransfersForecast(): void

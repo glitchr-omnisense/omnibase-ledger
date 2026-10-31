@@ -33,6 +33,10 @@ class LedgerConfiguration implements ConfigurationInterface
                     ->children()
                         ->integerNode('sync_overlap_days')->min(0)->defaultValue(5)
                             ->info('A sync asks again for the days before the last one: banks book late. Lines already imported are matched on their id.')->end()
+                        ->scalarNode('opening_account')->defaultValue('890')
+                            ->info('The account a bank account\'s opening entry is balanced against (the bank\'s balance less the lines imported): 890, Bilan d\'ouverture. Created when the chart does not have it.')->end()
+                        ->scalarNode('opening_journal')->defaultValue('AN')
+                            ->info('The journal the opening entries are posted in: AN, the à-nouveaux. Created when the book does not have it.')->end()
                     ->end()
                 ->end()
             ->end();

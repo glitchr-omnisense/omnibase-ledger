@@ -13,6 +13,7 @@ use Base\Field\TextField;
 use Base\Ledger\Controller\Admin\LedgerAdminTrait;
 use Base\Ledger\Entity\Account;
 use Base\Ledger\Entity\BankAccount;
+use Base\Ledger\Twig\LedgerExtension;
 use Base\Ledger\Entity\Journal;
 
 /**
@@ -64,7 +65,8 @@ class BankAccountCrudController extends AbstractCrudController
         yield $this->pick('journal', 'Journal', Journal::class, 'code')->setColumns(6);
         yield TextField::new('currency', 'Devise')->hideOnForm();
         yield TextField::new('bankBalance', 'Solde banque')->hideOnForm()
-            ->formatValue(fn ($value, BankAccount $account) => null === $account->getBankBalance() ? null : number_format($account->getBankBalance() / 100, 2, ',', ' ').' '.$account->getCurrency());
+            // In the page's language (intl's default follows it), as the dashboard's cards print it.
+            ->formatValue(fn ($value, BankAccount $account) => null === $account->getBankBalance() ? null : (new LedgerExtension())->money($account->getBankBalance(), $account->getCurrency()));
         yield DateTimeField::new('lastSyncedAt', 'Dernière synchro')->hideOnForm();
     }
 }

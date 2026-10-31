@@ -170,6 +170,11 @@ dashboard:
     error: "Failing"
     renew: "Reconnect"
     renewal_due: "Renewal due"
+    remove: "Remove this unfinished connection"
+    remove_confirm: "Remove this never-finished connection? It has no account."
+    abandoned: "Abandoned"
+    abandoned_since: "started on {date}, never finished"
+    abandoned_count: "{count, plural, one {# abandoned, not counted} other {# abandoned, not counted}}"
     expires: "consent until {date}"
     renewals: "{count, plural, =0 {no renewal due} one {# renewal within 30 days} other {# renewals within 30 days}}"
   transfers:
@@ -183,6 +188,7 @@ dashboard:
     week: "week of {from} to {to}"
     lines: "Lines"
     bucket: "Period"
+    clipped: "Bars cut beyond {max} to keep the others readable: their value is written above and in the tooltip."
   categories:
     spent: "spent"
     nothing: "Nothing spent in the period."

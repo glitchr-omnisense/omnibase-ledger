@@ -29,7 +29,8 @@ class BankWidgetsTest extends InMemoryDashboard
             self::markTestSkipped('Twig, the Twig bridge and omnibase/admin are needed.');
         }
         parent::setUp();
-        \Locale::setDefault('fr');
+        // Intl's default in another language than the page: amounts must follow the translator's.
+        \Locale::setDefault('en_US');
 
         $root = \dirname(__DIR__, 2);
         $loader = new FilesystemLoader();
@@ -42,7 +43,7 @@ class BankWidgetsTest extends InMemoryDashboard
         $this->twig = new Environment($loader, ['strict_variables' => true]);
         $this->twig->addExtension(new TranslationExtension($translator));
         $this->twig->addExtension(new \Twig\Extension\AttributeExtension(LedgerExtension::class));
-        $extension = new LedgerExtension();
+        $extension = new LedgerExtension($translator);
         $this->twig->addRuntimeLoader(new \Twig\RuntimeLoader\FactoryRuntimeLoader([LedgerExtension::class => fn () => $extension]));
         $this->twig->addFunction(new TwigFunction('path', fn (string $route, array $parameters = []) => '/'.$route.'?'.http_build_query($parameters)));
         $this->twig->addFunction(new TwigFunction('csrf_token', fn (string $id) => 'token-'.$id));
@@ -101,9 +102,9 @@ class BankWidgetsTest extends InMemoryDashboard
         self::assertStringContainsString('Net', $balance);
 
         $connections = $this->render(Bank\ConnectionsWidgetType::class);
-        self::assertStringContainsString('2 connexions', $connections);
+        self::assertStringContainsString('3 connexions', $connections, 'the page left three days ago apart');
         self::assertStringContainsString('Action requise', $connections);
-        self::assertStringContainsString('50 %', $connections);
+        self::assertStringContainsString('67 %', $connections);
         self::assertStringContainsString('ledger_admin_bank_renew', $connections, 'the way to act');
 
         $transfers = $this->render(Bank\TransfersWidgetType::class);
@@ -147,6 +148,43 @@ class BankWidgetsTest extends InMemoryDashboard
         $movements = $this->render(Bank\MovementsWidgetType::class);
         self::assertStringContainsString('Plomberie Kieffer', $movements, 'the largest of the month');
         self::assertMatchesRegularExpression('/2\s350,00/u', $movements);
+    }
+
+    public function testAmountsInThePagesLanguageWhateverIntlsDefault(): void
+    {
+        $html = $this->render(Bank\BalanceWidgetType::class);
+
+        self::assertMatchesRegularExpression('/40\s200,00\s€/u', $html, 'French, as the page (the translator), with intl\'s default in American English');
+        self::assertStringNotContainsString('40,200.00', $html);
+        self::assertDoesNotMatchRegularExpression('/\(\+?-?\d+\.\d %\)/', $html, 'the change\'s percentage with a decimal comma too');
+    }
+
+    public function testAHeavyMonthIsClippedNotFlatteningTheOthers(): void
+    {
+        // A term deposit opened two months ago: 200 000,00 out in a day, where a month moves 2 000,00.
+        $this->fold($this->bankAccount(), [...$this->checkingLines, $this->line(-20000000, 'VIR COMPTE A TERME', 'Meyers', null, \Omnibank\Model\TransactionCategory::SAVINGS, $this->today()->modify('first day of this month')->modify('-2 months +5 days'))]);
+        $html = $this->render(Bank\StatisticsWidgetType::class, ['period' => '12m']);
+
+        self::assertStringContainsString('ld-bar ld-bar-out is-clipped', $html);
+        self::assertStringContainsString('Barres coupées au-delà de', $html);
+        self::assertMatchesRegularExpression('/ld-clip-value">200\sk€/u', $html, 'its value written in full');
+        self::assertSame(2400, \Base\Ledger\Admin\Widget\Chart::robustMax([2400, 2000, 1500, 1800]), 'nothing towering: the largest');
+        self::assertSame(2000, \Base\Ledger\Admin\Widget\Chart::robustMax([2000000, 2000, 1500, 1800]));
+        self::assertSame(2000, \Base\Ledger\Admin\Widget\Chart::robustMax([2000000, 900000, 2000, 1500]), 'two towering ones');
+        self::assertSame(2500, \Base\Ledger\Admin\Widget\Chart::robustMax([2500, 2000]), 'close: the largest kept');
+    }
+
+    public function testAbandonedConnectionsApartAndRemovable(): void
+    {
+        $html = $this->render(Bank\ConnectionsWidgetType::class);
+
+        self::assertStringContainsString('3 connexions', $html, 'the abandoned one not counted');
+        self::assertStringContainsString('Abandonnée', $html);
+        self::assertStringContainsString('1 abandonnée, hors décompte', $html);
+        self::assertStringContainsString('action="/ledger_admin_bank_remove?connection=3"', $html);
+        self::assertStringContainsString('value="token-ledger_bank_remove_3"', $html);
+        self::assertStringContainsString('action="/ledger_admin_bank_remove?connection=4"', $html, 'the one just opened: removable too, still counted');
+        self::assertStringNotContainsString('ledger_admin_bank_remove?connection=1"', $html, 'never one with accounts');
     }
 
     public function testNoAccountYet(): void

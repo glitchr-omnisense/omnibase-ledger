@@ -170,6 +170,11 @@ dashboard:
     error: "En erreur"
     renew: "Reconnecter"
     renewal_due: "À renouveler"
+    remove: "Supprimer cette connexion inachevée"
+    remove_confirm: "Supprimer cette connexion jamais finalisée ? Elle n'a aucun compte."
+    abandoned: "Abandonnée"
+    abandoned_since: "commencée le {date}, jamais finalisée"
+    abandoned_count: "{count, plural, one {# abandonnée, hors décompte} other {# abandonnées, hors décompte}}"
     expires: "consentement jusqu'au {date}"
     renewals: "{count, plural, =0 {aucun renouvellement à prévoir} one {# renouvellement sous 30 jours} other {# renouvellements sous 30 jours}}"
   transfers:
@@ -183,6 +188,7 @@ dashboard:
     week: "semaine du {from} au {to}"
     lines: "Opérations"
     bucket: "Période"
+    clipped: "Barres coupées au-delà de {max} pour garder les autres lisibles : la valeur est inscrite au-dessus et au survol."
   categories:
     spent: "dépensés"
     nothing: "Aucune dépense sur la période."

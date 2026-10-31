@@ -1,7 +1,9 @@
 {# Base\Ledger\Admin\Widget\Bank\ConnectionsWidgetType: the bank accesses by state, the renewals due. #}
 {% extends '@Ledger/admin/widget/bank/_layout.html.twig' %}
+{% macro remove(connection) %}<form class="ld-inline" method="post" action="{{ path('ledger_admin_bank_remove', {connection: connection.id}) }}" onsubmit="return confirm('{{ 'dashboard.connections.remove_confirm'|trans({}, 'ledger')|e('js') }}')"><input type="hidden" name="_token" value="{{ csrf_token('ledger_bank_remove_' ~ connection.id) }}"><button type="submit" class="ld-icon-btn" title="{{ 'dashboard.connections.remove'|trans({}, 'ledger') }}" aria-label="{{ 'dashboard.connections.remove'|trans({}, 'ledger') }}"><i class="fa-solid fa-trash-can"></i></button></form>{% endmacro %}
 {% block subtitle %}{{ 'dashboard.connections.count'|trans({count: state.total}, 'ledger') }}{% endblock %}
 {% block body %}
+{% import _self as connections_card %}
 {% set icons = {ok: 'fa-circle-check', action: 'fa-triangle-exclamation', unavailable: 'fa-cloud', error: 'fa-circle-xmark'} %}
 <div class="ld-stack" role="img" aria-label="{% for group, count in state.groups %}{{ ('dashboard.connections.' ~ group)|trans({}, 'ledger') }} {{ shares[group]|round }} %{{ not loop.last ? ', ' }}{% endfor %}">
     {% for group, count in state.groups %}{% if count > 0 %}<span class="ld-seg is-{{ group }}" style="flex: {{ shares[group] }} 1 0" title="{{ ('dashboard.connections.' ~ group)|trans({}, 'ledger') }} : {{ count }}"></span>{% endif %}{% endfor %}
@@ -14,14 +16,17 @@
 <ul class="ld-rows" style="margin-top: .8rem">
     {% for row in listed %}
     <li><span class="ld-main"><strong>{{ row.connection }}</strong><span class="ld-muted">{% if row.connection.name|lower != row.connection.gateway|lower %}{{ row.connection.gateway|capitalize }} · {% endif %}{{ 'dashboard.accounts_count'|trans({count: row.connection.accounts|length}, 'ledger') }}{% if row.state.group() != 'ok' and row.connection.lastError %} · {{ row.connection.lastError|length > 50 ? row.connection.lastError|slice(0, 49) ~ '…' : row.connection.lastError }}{% endif %}</span></span>
-        {% if row.state.needsUser() and row.connection.gateway != 'files' and can_manage %}<a class="ld-pill is-alert" href="{{ path('ledger_admin_bank_renew', {connection: row.connection.id, _token: csrf_token('ledger_bank_renew_' ~ row.connection.id)}) }}">{{ 'dashboard.connections.renew'|trans({}, 'ledger') }}</a>{% else %}<span class="ld-pill {{ row.state.group() == 'ok' ? 'is-ok' : (row.state.group() == 'error' ? 'is-alert' : 'is-wait') }}">{{ ('dashboard.state.' ~ row.state.value)|trans({}, 'ledger') }}</span>{% endif %}</li>
+        <span class="ld-actions">{% if row.state.needsUser() and row.connection.gateway != 'files' and can_manage %}<a class="ld-pill is-alert" href="{{ path('ledger_admin_bank_renew', {connection: row.connection.id, _token: csrf_token('ledger_bank_renew_' ~ row.connection.id)}) }}">{{ 'dashboard.connections.renew'|trans({}, 'ledger') }}</a>{% else %}<span class="ld-pill {{ row.state.group() == 'ok' ? 'is-ok' : (row.state.group() == 'error' ? 'is-alert' : 'is-wait') }}">{{ ('dashboard.state.' ~ row.state.value)|trans({}, 'ledger') }}</span>{% endif %}{% if row.connection.unfinished and can_manage %}{{ connections_card.remove(row.connection) }}{% endif %}</span></li>
+    {% endfor %}
+    {% for connection in state.abandoned %}
+    <li class="ld-abandoned"><span class="ld-main"><strong>{{ connection }}</strong><span class="ld-muted">{{ 'dashboard.connections.abandoned_since'|trans({date: connection.createdAt|date('d/m/Y')}, 'ledger') }}</span></span><span class="ld-actions"><span class="ld-pill">{{ 'dashboard.connections.abandoned'|trans({}, 'ledger') }}</span>{% if can_manage %}{{ connections_card.remove(connection) }}{% endif %}</span></li>
     {% endfor %}
     {% for connection in renewals %}
     <li><span class="ld-main"><strong>{{ connection }}</strong><span class="ld-muted">{{ 'dashboard.connections.expires'|trans({date: connection.expiresAt ? connection.expiresAt|date('d/m/Y') : '-'}, 'ledger') }}</span></span><span class="ld-pill is-wait">{{ 'dashboard.connections.renewal_due'|trans({}, 'ledger') }}</span></li>
     {% endfor %}
 </ul>
 <div class="ld-foot">
-    <span class="ld-muted">{{ 'dashboard.connections.renewals'|trans({count: state.renewals|length}, 'ledger') }}</span>
+    <span class="ld-muted">{{ 'dashboard.connections.renewals'|trans({count: state.renewals|length}, 'ledger') }}{% if state.abandoned is not empty %} · {{ 'dashboard.connections.abandoned_count'|trans({count: state.abandoned|length}, 'ledger') }}{% endif %}</span>
     {% if connections_url %}<a class="ld-link" href="{{ connections_url }}">{{ 'dashboard.see_more'|trans({}, 'ledger') }} <i class="fa-solid fa-arrow-right"></i></a>{% endif %}
 </div>
 {% endblock %}

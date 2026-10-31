@@ -27,6 +27,7 @@ class StatementUpload
         private readonly Connections $connections,
         private readonly Importer $importer,
         private readonly ?Aggregates $aggregates = null,
+        private readonly ?Opening $opening = null,
     ) {
     }
 
@@ -70,6 +71,11 @@ class StatementUpload
         $account->setLastSyncedAt(new \DateTimeImmutable());
         $account->getConnection()->setConnectionState(ConnectionState::OK);
         $this->entityManager->flush();
+        try {
+            $this->opening?->open($account);
+        } catch (\Base\Ledger\Exception\LedgerException) {
+            // A period the book locked: ledger:bank:opening writes it once opened.
+        }
         $this->aggregates?->rebuild($account);
 
         return $created;

@@ -152,6 +152,29 @@ class BankController extends AbstractLedgerPageController
         return $this->back($request);
     }
 
+    /**
+     * Removes a connection left unfinished on the provider's page: no
+     * consent given, no account (BankConnection::isUnfinished()). One that
+     * holds accounts is never removed from here. POST, with its token.
+     */
+    #[Route('/connection/{connection}/remove', name: 'ledger_admin_bank_remove', requirements: ['connection' => '\d+'], methods: ['POST'])]
+    public function remove(Request $request, int $connection): RedirectResponse
+    {
+        $bankConnection = $this->load(BankConnection::class, $connection, LedgerVoter::MANAGE);
+        if (!$this->isCsrfTokenValid('ledger_bank_remove_'.$bankConnection->getId(), (string) $request->request->get('_token'))) {
+            throw $this->createAccessDeniedException('Invalid token.');
+        }
+        if (!$bankConnection->isUnfinished()) {
+            $this->addFlash('error', sprintf('%s : seule une connexion jamais finalisée, sans compte, se supprime ici.', $bankConnection));
+
+            return $this->back($request);
+        }
+        $this->connections->remove($bankConnection);
+        $this->addFlash('success', sprintf('%s : connexion inachevée supprimée.', $bankConnection));
+
+        return $this->back($request);
+    }
+
     #[Route('/{bankAccount}/sync', name: 'ledger_admin_bank_sync', requirements: ['bankAccount' => '\d+'], methods: ['GET'])]
     public function sync(Request $request, int $bankAccount): RedirectResponse
     {
