@@ -29,6 +29,7 @@
     /* The page holds to the window: one column no wider than it (the open items' table scrolls in its own box), a long bank label breaks. */
     .ledger { grid-template-columns: minmax(0, 1fr); }
     .ledger-label { overflow-wrap: anywhere; }
+    .ledger-scroll { overflow-x: auto; }
 </style>
 <div class="ledger">
     <div class="toolbar">
@@ -128,6 +129,7 @@
     {% if done is not empty %}
     <div class="card">
         <strong>{{ 'reconcile.done'|trans({}, 'ledger') }}</strong>
+        <div class="ledger-scroll">
         <table>
             {% for line in done %}
             <tr>
@@ -146,6 +148,7 @@
             </tr>
             {% endfor %}
         </table>
+        </div>
     </div>
     {% endif %}
 </div>
