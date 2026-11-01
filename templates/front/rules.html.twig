@@ -1,0 +1,66 @@
+{% extends '@Ledger/front/layout.html.twig' %}
+
+{% block ledger_title %}{{ 'review.rules.title'|trans({}, 'ledger') }}{% endblock %}
+{% block ledger_class %}ledger-front-rules{% endblock %}
+
+{% block ledger_content %}
+<p class="ledger-rules-lead">{{ 'review.rules.lead'|trans({}, 'ledger') }}</p>
+{%- set all = categories.groups|reduce((carry, list) => carry|merge(list), []) -%}
+{%- set taxes = categories.taxes.deductible|merge(categories.taxes.collected) -%}
+<div class="ledger-rules" role="list">
+    {%- for rule in rules -%}
+    {%- set split = rule.split ?? [] -%}
+    {%- set simple = split is empty or (split|length == 1 and split[0].rest is defined and split[0].rest) -%}
+    <form class="ledger-rule{{ rule.enabled ? '' : ' is-off' }}" id="rule-{{ rule.id }}" role="listitem" method="post" action="{{ path('ledger_front_rule_edit', {id: rule.id}) }}">
+        <input type="hidden" name="_token" value="{{ csrf_token(token) }}">
+        <label class="ledger-rule-name">{{ 'review.rules.name'|trans({}, 'ledger') }}
+            <input type="text" name="name" value="{{ rule.name }}" required {{ not can_manage ? 'disabled' }}>
+        </label>
+        <label class="ledger-rule-pattern">{{ 'review.rules.pattern'|trans({}, 'ledger') }}
+            <input type="text" name="pattern" value="{{ rule.pattern }}" {{ not can_manage ? 'disabled' }}>
+        </label>
+        <label>{{ 'review.rules.sign'|trans({}, 'ledger') }}
+            <select name="sign" {{ not can_manage ? 'disabled' }}>
+                {% for sign in ['out', 'in', 'any'] %}<option value="{{ sign }}" {{ rule.sign.value == sign ? 'selected' }}>{{ ('review.rules.signs.' ~ sign)|trans({}, 'ledger') }}</option>{% endfor %}
+            </select>
+        </label>
+        <label class="ledger-rule-account">{{ 'review.rules.account'|trans({}, 'ledger') }}
+            <select name="account" {{ not can_manage ? 'disabled' }}>
+                {%- if rule.account.number not in all|map(c => c.number) %}<option value="{{ rule.account.number }}" selected>{{ rule.account.number }} · {{ rule.account.label }}</option>{% endif -%}
+                {%- for category in all -%}
+                <option value="{{ category.number }}" {{ rule.account.number == category.number ? 'selected' }}>{{ category.key ? ('review.category.' ~ category.key)|trans({}, 'ledger') : category.label }} · {{ category.number }}</option>
+                {%- endfor -%}
+            </select>
+        </label>
+        <label>{{ 'review.picker.party'|trans({}, 'ledger') }}
+            <select name="party" {{ not can_manage ? 'disabled' }}>
+                <option value="">—</option>
+                {% for party in parties %}<option value="{{ party.id }}" {{ rule.party and rule.party.id == party.id ? 'selected' }}>{{ party.name }}</option>{% endfor %}
+            </select>
+        </label>
+        {%- if taxes is not empty and simple -%}
+        <label>{{ 'review.picker.vat'|trans({}, 'ledger') }}
+            <select name="tax" {{ not can_manage ? 'disabled' }}>
+                <option value="">{{ 'review.picker.no_vat'|trans({}, 'ledger') }}</option>
+                {% for tax in taxes %}<option value="{{ tax.code }}" {{ (split[0].tax ?? '') == tax.code ? 'selected' }}>{{ tax.label }}</option>{% endfor %}
+            </select>
+        </label>
+        {%- elseif not simple -%}
+        <p class="ledger-rule-split">{{ 'review.rules.split'|trans({count: split|length}, 'ledger') }}</p>
+        {%- endif -%}
+        <label class="ledger-rule-priority">{{ 'review.rules.priority'|trans({}, 'ledger') }}
+            <input type="number" name="priority" value="{{ rule.priority }}" step="1" {{ not can_manage ? 'disabled' }}>
+        </label>
+        <label class="ledger-rule-enabled"><input type="checkbox" name="enabled" value="1" {{ rule.enabled ? 'checked' }} {{ not can_manage ? 'disabled' }}> {{ 'review.rules.enabled'|trans({}, 'ledger') }}</label>
+        {% if can_manage %}
+        <span class="ledger-rule-actions">
+            <button type="submit" class="ledger-button is-primary">{{ 'review.rules.save'|trans({}, 'ledger') }}</button>
+            <button type="submit" class="ledger-button is-quiet" name="delete" value="1" data-confirm="{{ 'review.rules.delete_confirm'|trans({name: rule.name}, 'ledger') }}">{{ 'review.rules.delete'|trans({}, 'ledger') }}</button>
+        </span>
+        {% endif %}
+    </form>
+    {%- else -%}
+    <p class="ledger-review-empty">{{ 'review.rules.none'|trans({}, 'ledger') }}</p>
+    {%- endfor -%}
+</div>
+{% endblock %}

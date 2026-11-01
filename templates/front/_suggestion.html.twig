@@ -1,0 +1,14 @@
+{#- One suggestion in words: whose, which pieces - « Loyer Léa Muller · AVIS-2026-10-U3 ». -#}
+{%- if suggestion.openItems is not empty -%}
+    {%- set first = suggestion.openItems|first -%}
+    {{- suggestion.party.name ?? first.party.name ?? first.entry.label -}}
+    {%- set pieces = suggestion.openItems|map(i => i.entry.piece ?? i.entry.label)|filter(p => p) -%}
+    {%- if pieces is not empty %} · {{ pieces|first }}{% if pieces|length > 1 %} +{{ pieces|length - 1 }}{% endif %}{% endif -%}
+{%- elseif suggestion.rule -%}
+    {%- set key = ledger_category(suggestion.rule.account.number) -%}
+    {{- suggestion.rule.name }} → {{ key ? ('review.category.' ~ key)|trans({}, 'ledger') : suggestion.rule.account.label -}}
+{%- elseif suggestion.party -%}
+    {{- 'review.on_account'|trans({name: suggestion.party.name}, 'ledger') -}}
+{%- else -%}
+    {{- suggestion.reason -}}
+{%- endif -%}

@@ -13,17 +13,30 @@ use Base\Ledger\Entity\ReconciliationRule;
  * (a payment on account). $score runs from 0 to 1; Reconciler applies a
  * suggestion on its own only when it is the single one at or above
  * ledger.reconciliation.auto_threshold.
+ *
+ * $parts, given by hand (the front office's category or split), say where
+ * each share of the line goes and prevail over the rest.
  */
 final readonly class Suggestion
 {
-    /** @param list<EntryLine> $openItems */
+    /**
+     * @param list<EntryLine> $openItems
+     * @param list<Part>      $parts
+     */
     public function __construct(
         public float $score,
         public string $reason,
         public array $openItems = [],
         public ?ReconciliationRule $rule = null,
         public ?Party $party = null,
+        public array $parts = [],
     ) {
+    }
+
+    /** A suggestion made of parts given by hand (a category for the whole line, a split). */
+    public static function ofParts(string $reason, Part ...$parts): self
+    {
+        return new self(1.0, $reason, [], null, null, array_values($parts));
     }
 
     /** What the open items add up to, debit minus credit: the bank amount they settle exactly. */
@@ -49,6 +62,6 @@ final readonly class Suggestion
 
     public function withScore(float $score, ?string $reason = null): self
     {
-        return new self($score, $reason ?? $this->reason, $this->openItems, $this->rule, $this->party);
+        return new self($score, $reason ?? $this->reason, $this->openItems, $this->rule, $this->party, $this->parts);
     }
 }

@@ -1,0 +1,95 @@
+{#-
+ # A bank line as a row of the list: date, label (the bank's on hover),
+ # amount, account, then what it is - the best suggestion as a chip to
+ # accept, the others under « autres », a category to choose otherwise; or
+ # what it was placed on -, its receipt, its actions. Rendered again after
+ # each action (BankReviewController answers it).
+ #}
+{%- set line = row.line -%}
+{%- set pending = line.status.pending -%}
+{%- set best = row.suggestions|first -%}
+{%- set in = line.amount > 0 -%}
+<div class="ledger-row is-{{ line.status.value }}{{ pending ? ' is-pending' : ' is-done' }}{{ line.receiptMissing ? ' is-missing' }}" role="listitem" tabindex="-1"
+     id="ledger-line-{{ line.id }}" data-line="{{ line.id }}" data-pending="{{ pending ? 1 : 0 }}" data-label="{{ row.label }}" data-amount="{{ line.amount|abs }}" data-sign="{{ in ? 'in' : 'out' }}"
+     data-url-accept="{{ path('ledger_front_review_accept', {id: line.id}) }}"
+     data-url-categorize="{{ path('ledger_front_review_categorize', {id: line.id}) }}"
+     data-url-split="{{ path('ledger_front_review_split', {id: line.id}) }}"
+     data-url-candidates="{{ path('ledger_front_review_candidates', {id: line.id}) }}"
+     data-url-ignore="{{ path('ledger_front_review_ignore', {id: line.id}) }}"
+     data-url-undo="{{ path('ledger_front_review_undo', {id: line.id}) }}"
+     data-url-missing="{{ path('ledger_front_review_missing', {id: line.id}) }}"
+     data-url-receipt="{{ path('ledger_front_review_receipt', {id: line.id}) }}">
+    <span class="ledger-row-date"><time datetime="{{ line.bookedOn|date('Y-m-d') }}">{{ line.bookedOn|date('d/m') }}</time><span class="ledger-row-year">{{ line.bookedOn|date('Y') }}</span></span>
+    <span class="ledger-row-label" title="{{ line.label }}{{ line.counterpartyName ? ' · ' ~ line.counterpartyName }}{{ line.reference ? ' · ' ~ line.reference }}">
+        <strong>{{ row.label ?: 'review.no_label'|trans({}, 'ledger') }}</strong>
+        <small><span class="ledger-row-day">{{ line.bookedOn|date('d/m/Y') }} · </span>{{ line.bankAccount.name }}</small>
+    </span>
+    <span class="ledger-row-amount {{ in ? 'is-in' : 'is-out' }}">{{ in ? '+' }}{{ line.amount|ledger_money(line.currency) }}</span>
+    <span class="ledger-row-what">
+        {%- if pending -%}
+            {%- if best -%}
+            {%- set word = best.score >= threshold ? 'sure' : (best.score >= 0.75 ? 'likely' : 'possible') -%}
+            <button type="button" class="ledger-chip is-{{ word }}" data-action="accept" data-suggestion="0" {{ not can_manage ? 'disabled' }} title="{{ best.reason }}">
+                <span class="ledger-chip-text">{{ include('@Ledger/front/_suggestion.html.twig', {suggestion: best}) }}</span>
+                <em class="ledger-chip-score">{{ ('review.score.' ~ word)|trans({}, 'ledger') }}</em>
+            </button>
+            {%- if row.suggestions|length > 1 -%}
+            <details class="ledger-others">
+                <summary>{{ 'review.others'|trans({count: row.suggestions|length - 1}, 'ledger') }}</summary>
+                <div class="ledger-others-list">
+                    {%- for suggestion in row.suggestions|slice(1) -%}
+                    {%- set w = suggestion.score >= threshold ? 'sure' : (suggestion.score >= 0.75 ? 'likely' : 'possible') -%}
+                    <button type="button" class="ledger-chip is-{{ w }}" data-action="accept" data-suggestion="{{ loop.index }}" {{ not can_manage ? 'disabled' }} title="{{ suggestion.reason }}">
+                        <span class="ledger-chip-text">{{ include('@Ledger/front/_suggestion.html.twig', {suggestion: suggestion}) }}</span>
+                        <em class="ledger-chip-score">{{ ('review.score.' ~ w)|trans({}, 'ledger') }}</em>
+                    </button>
+                    {%- endfor -%}
+                </div>
+            </details>
+            {%- endif -%}
+            {%- elseif can_manage -%}
+            <button type="button" class="ledger-choose" data-action="choose">{{ 'review.choose'|trans({}, 'ledger') }}</button>
+            {%- else -%}
+            <span class="ledger-row-note">{{ 'review.nothing'|trans({}, 'ledger') }}</span>
+            {%- endif -%}
+        {%- elseif line.status.value == 'reconciled' and line.entry -%}
+            {%- set others = line.entry.lines|filter(l => l.account.number != line.bankAccount.account.number) -%}
+            <span class="ledger-placed">
+                <i aria-hidden="true">✓</i>
+                {%- for placed in others|slice(0, 3) -%}
+                    {%- set key = ledger_category(placed.account.number) -%}
+                    <span>{{ placed.party.name ?? (key ? ('review.category.' ~ key)|trans({}, 'ledger') : placed.account.label) }}</span>{{ not loop.last ? ', ' }}
+                {%- endfor -%}
+                {%- if others|length > 3 %} +{{ others|length - 3 }}{% endif -%}
+                <small>{{ line.entry.number }}</small>
+            </span>
+        {%- else -%}
+            <span class="ledger-placed is-ignored">{{ 'status.ignored'|trans({}, 'ledger') }}</span>
+        {%- endif -%}
+    </span>
+    <span class="ledger-row-receipt">
+        {%- if line.hasReceipt -%}
+            {%- set file = path('ledger_front_review_receipt_file', {id: line.id}) -%}
+            <a class="ledger-receipt" href="{{ file }}" target="_blank" rel="noopener" title="{{ line.receiptName }}">
+                {%- if line.receiptImage -%}<img src="{{ file }}" alt="{{ 'review.receipt.alt'|trans({}, 'ledger') }}" loading="lazy" width="28" height="28">{%- else -%}<span class="ledger-receipt-doc">PDF</span>{%- endif -%}
+            </a>
+        {%- elseif line.receiptMissing -%}
+            <span class="ledger-receipt-missing" title="{{ 'review.receipt.missing'|trans({}, 'ledger') }}">{{ 'review.receipt.missing_short'|trans({}, 'ledger') }}</span>
+        {%- endif -%}
+    </span>
+    {%- if can_manage -%}
+    <span class="ledger-row-actions">
+        {%- if pending -%}
+        <button type="button" data-action="choose" title="{{ 'review.keys.choose'|trans({}, 'ledger') }} (c)">{{ 'review.action.category'|trans({}, 'ledger') }}</button>
+        <button type="button" data-action="split" title="{{ 'review.keys.split'|trans({}, 'ledger') }} (s)">{{ 'review.action.split'|trans({}, 'ledger') }}</button>
+        <button type="button" data-action="ignore" title="{{ 'review.keys.ignore'|trans({}, 'ledger') }} (i)">{{ 'review.action.ignore'|trans({}, 'ledger') }}</button>
+        {%- else -%}
+        <button type="button" data-action="undo" title="{{ 'review.keys.undo'|trans({}, 'ledger') }} (u)">{{ 'review.action.undo'|trans({}, 'ledger') }}</button>
+        {%- endif -%}
+        <button type="button" data-action="attach" title="{{ 'review.keys.attach'|trans({}, 'ledger') }} (a)">{{ line.hasReceipt ? 'review.action.replace'|trans({}, 'ledger') : 'review.action.attach'|trans({}, 'ledger') }}</button>
+        {%- if not line.hasReceipt -%}
+        <button type="button" data-action="missing" aria-pressed="{{ line.receiptMissing ? 'true' : 'false' }}" title="{{ 'review.keys.missing'|trans({}, 'ledger') }} (m)">{{ 'review.action.missing'|trans({}, 'ledger') }}</button>
+        {%- endif -%}
+    </span>
+    {%- endif -%}
+</div>

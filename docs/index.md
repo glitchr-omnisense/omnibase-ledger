@@ -48,6 +48,8 @@ orders stay the application's, which posts what they mean.
   the VAT return (CA3, CA12).
 - [Analytic axes](usage-dimensions.md): dimensions on entry lines, the reports filtered and
   grouped by them, the labelers.
+- [The front office's bank screen](front-office.md): the team's day-to-day reconciliation at
+  `/comptabilite` - compact rows, the keyboard, categories, splits, rules, receipts, sync.
 - [The back office](back-office.md): the screens, the pages, the dashboard widgets, who sees
   a book.
 - [Configuration reference](configuration.md): `ledger:`, the parameters, the services.

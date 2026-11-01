@@ -38,6 +38,8 @@ return function (ContainerConfigurator $configurator) {
             $src.'/Event/',
             $src.'/Exception/',
             $src.'/Reconciliation/Suggestion.php',
+            $src.'/Reconciliation/Part.php',
+            $src.'/Bank/Label.php',
             $src.'/Controller/Admin/',
             $src.'/Admin/',
             $src.'/LedgerBundle.php',

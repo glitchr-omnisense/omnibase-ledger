@@ -1,0 +1,232 @@
+/*
+ * omnibase/ledger - the front office's bank screen: structure only, on custom properties a site
+ * sets in its own style (fonts, colours, dark mode). Compact rows, not cards: a line is one row
+ * of about 44px; at a phone's width its label and amount above, what it is below.
+ */
+/* The defaults at no specificity (:where): a site's own .ledger-front { --ledger-...: } wins whatever the order the styles load in. */
+:where(.ledger-front) {
+    --ledger-ink: #1b1d20;
+    --ledger-soft: #5d6168;
+    --ledger-paper: #fff;
+    --ledger-mist: #f4f5f6;
+    --ledger-line: #e4e6e8;
+    --ledger-accent: #1e3a5f;
+    --ledger-accent-ink: #fff;
+    --ledger-in: #2d6a4f;
+    --ledger-out: var(--ledger-ink);
+    --ledger-sure: #2d6a4f;
+    --ledger-likely: #8a6410;
+    --ledger-possible: var(--ledger-soft);
+    --ledger-warn: #b42d29;
+    --ledger-radius: .45rem;
+    --ledger-current: rgba(30, 58, 95, .07);
+    color: var(--ledger-ink);
+    font-size: .875rem;
+    line-height: 1.4;
+    max-width: 82rem;
+    margin: 0 auto;
+    padding: 1.25rem clamp(1rem, 3vw, 2rem) 3rem;
+}
+
+.ledger-visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.ledger-front-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: .75rem 1.5rem; margin-bottom: 1rem; }
+.ledger-front-head h1 { margin: 0; font-size: 1.6rem; line-height: 1.15; }
+.ledger-front-lead { margin: .2rem 0 0; color: var(--ledger-soft); }
+.ledger-front-lead select { font: inherit; color: inherit; border: 1px solid var(--ledger-line); border-radius: var(--ledger-radius); background: var(--ledger-paper); padding: .15rem .4rem; }
+.ledger-front-tabs { display: flex; gap: .25rem; }
+.ledger-front-tabs a { padding: .35rem .7rem; border-radius: var(--ledger-radius); color: var(--ledger-soft); text-decoration: none; font-weight: 600; }
+.ledger-front-tabs a[aria-current] { color: var(--ledger-ink); background: var(--ledger-mist); }
+
+.ledger-button { font: inherit; font-weight: 600; padding: .4rem .8rem; border-radius: var(--ledger-radius); border: 1px solid var(--ledger-line); background: var(--ledger-paper); color: var(--ledger-ink); cursor: pointer; white-space: nowrap; }
+.ledger-button:hover { border-color: var(--ledger-soft); }
+.ledger-button.is-primary { background: var(--ledger-accent); border-color: var(--ledger-accent); color: var(--ledger-accent-ink); }
+.ledger-button.is-quiet { border-color: transparent; color: var(--ledger-soft); }
+.ledger-button:disabled { opacity: .5; cursor: default; }
+
+/* The bar: states with their counters, filters, the month's progress, the tools. */
+.ledger-review-bar { display: grid; grid-template-columns: 1fr auto; gap: .6rem 1rem; align-items: center; padding-bottom: .75rem; border-bottom: 1px solid var(--ledger-line); }
+.ledger-review-bar > * { min-width: 0; }
+.ledger-review-states { display: flex; flex-wrap: wrap; gap: .25rem; grid-column: 1 / -1; max-width: 100%; }
+.ledger-review-states a { white-space: nowrap; display: inline-flex; align-items: center; gap: .4rem; padding: .3rem .65rem; border-radius: 999px; color: var(--ledger-soft); text-decoration: none; font-weight: 600; }
+.ledger-review-states a[aria-current] { background: var(--ledger-ink); color: var(--ledger-paper); }
+.ledger-count { font-variant-numeric: tabular-nums; font-weight: 500; opacity: .8; }
+.ledger-review-filters { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.ledger-review-filters select, .ledger-review-filters input { font: inherit; color: inherit; background: var(--ledger-paper); border: 1px solid var(--ledger-line); border-radius: var(--ledger-radius); padding: .35rem .55rem; min-height: 2.1rem; }
+.ledger-review-search input { width: 17rem; max-width: 100%; }
+.ledger-review-tools { display: flex; gap: .5rem; justify-content: flex-end; align-self: start; }
+.ledger-review-progress { display: grid; gap: .25rem; min-width: 12rem; grid-column: 1 / -1; }
+.ledger-review-progress-text { color: var(--ledger-soft); font-variant-numeric: tabular-nums; }
+.ledger-review-progress-bar { display: block; height: .3rem; border-radius: 999px; background: var(--ledger-mist); overflow: hidden; }
+.ledger-review-progress-bar span { display: block; height: 100%; background: var(--ledger-in); transition: width .3s ease; }
+
+/* The rows. */
+.ledger-review-list { margin-top: .25rem; }
+.ledger-review[aria-busy] .ledger-review-list { cursor: progress; }
+.ledger-row {
+    display: grid;
+    grid-template-columns: 3.4rem minmax(9rem, 1.2fr) 7.5rem minmax(12rem, 2.6fr) 2rem;
+    position: relative;
+    align-items: center;
+    gap: .75rem;
+    min-height: 2.75rem;
+    padding: .3rem .6rem;
+    border-bottom: 1px solid var(--ledger-line);
+    border-left: 3px solid transparent;
+    outline: none;
+}
+.ledger-row.is-current { background: var(--ledger-current); border-left-color: var(--ledger-accent); }
+.ledger-row.is-done .ledger-row-label strong, .ledger-row.is-done .ledger-row-amount { opacity: .55; }
+.ledger-row.is-drop { outline: 2px dashed var(--ledger-accent); outline-offset: -2px; }
+.ledger-row-date { color: var(--ledger-soft); font-variant-numeric: tabular-nums; display: grid; line-height: 1.15; }
+.ledger-row-year { font-size: .75em; opacity: .7; }
+.ledger-row-label { min-width: 0; display: grid; line-height: 1.25; }
+.ledger-row-label strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.ledger-row-day { display: none; }
+.ledger-row-label small { color: var(--ledger-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .8em; }
+.ledger-row-amount { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; color: var(--ledger-out); }
+.ledger-row-amount.is-in { color: var(--ledger-in); }
+.ledger-row-what { min-width: 0; display: flex; align-items: center; gap: .4rem; }
+.ledger-row-receipt { display: flex; justify-content: center; }
+/* The actions over the row's end (short of the receipt), on hover or on the current row: they take no column. */
+.ledger-row-actions { position: absolute; right: 3rem; top: 50%; transform: translateY(-50%); display: none; gap: .2rem; padding-left: .75rem; background: var(--ledger-paper); box-shadow: -14px 0 12px -2px var(--ledger-paper); }
+.ledger-row.is-current .ledger-row-actions, .ledger-row:hover .ledger-row-actions { background-image: linear-gradient(var(--ledger-current), var(--ledger-current)); }
+.ledger-row:hover { background: var(--ledger-current); }
+/* Under the pointer only: the keyboard has its keys, and the current row's chip stays whole. */
+.ledger-row:hover .ledger-row-actions, .ledger-row:has(.ledger-row-actions :focus-visible) .ledger-row-actions { display: flex; }
+.ledger-row-actions button { font: inherit; font-size: .8em; padding: .2rem .45rem; border: 1px solid transparent; border-radius: var(--ledger-radius); background: none; color: var(--ledger-soft); cursor: pointer; white-space: nowrap; }
+.ledger-row-actions button:hover, .ledger-row-actions button[aria-pressed="true"] { border-color: var(--ledger-line); color: var(--ledger-ink); }
+
+/* The suggestion as a chip, its trust in words. */
+.ledger-chip { display: inline-flex; align-items: center; gap: .5rem; min-width: 0; max-width: 100%; font: inherit; padding: .25rem .35rem .25rem .6rem; border-radius: 999px; border: 1px solid var(--ledger-line); background: var(--ledger-paper); color: var(--ledger-ink); cursor: pointer; text-align: left; }
+.ledger-chip:hover:not(:disabled) { border-color: var(--ledger-accent); }
+.ledger-chip-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ledger-chip-score { font-style: normal; font-size: .78em; font-weight: 600; padding: .05rem .45rem; border-radius: 999px; background: var(--ledger-mist); white-space: nowrap; }
+.ledger-chip.is-sure .ledger-chip-score { color: var(--ledger-sure); }
+.ledger-chip.is-likely .ledger-chip-score { color: var(--ledger-likely); }
+.ledger-chip.is-possible .ledger-chip-score { color: var(--ledger-possible); }
+.ledger-row.is-current .ledger-chip:first-child { border-color: var(--ledger-accent); }
+.ledger-others { position: relative; flex: none; }
+.ledger-others summary { cursor: pointer; color: var(--ledger-soft); font-size: .85em; list-style: none; padding: .2rem .35rem; border-radius: var(--ledger-radius); }
+.ledger-others summary::-webkit-details-marker { display: none; }
+.ledger-others[open] summary { background: var(--ledger-mist); }
+.ledger-others:not([open]) .ledger-others-list { display: none; }
+.ledger-others-list { position: absolute; z-index: 5; right: 0; top: calc(100% + .25rem); display: grid; gap: .3rem; padding: .5rem; min-width: 18rem; max-width: 28rem; background: var(--ledger-paper); border: 1px solid var(--ledger-line); border-radius: var(--ledger-radius); box-shadow: 0 8px 24px rgba(0, 0, 0, .12); }
+.ledger-choose { font: inherit; padding: .25rem .6rem; border-radius: 999px; border: 1px dashed var(--ledger-soft); background: none; color: var(--ledger-soft); cursor: pointer; }
+.ledger-choose:hover { color: var(--ledger-ink); border-color: var(--ledger-ink); }
+.ledger-row-note { color: var(--ledger-soft); }
+.ledger-placed { color: var(--ledger-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ledger-placed i { font-style: normal; color: var(--ledger-in); margin-right: .25rem; }
+.ledger-placed small { margin-left: .4rem; opacity: .7; }
+
+/* Receipts. */
+.ledger-receipt { display: block; width: 1.75rem; height: 1.75rem; border-radius: .3rem; overflow: hidden; border: 1px solid var(--ledger-line); }
+.ledger-receipt img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ledger-receipt-doc { display: grid; place-items: center; height: 100%; font-size: .6rem; font-weight: 700; color: var(--ledger-soft); text-decoration: none; }
+.ledger-receipt-missing { font-size: .72em; font-weight: 600; color: var(--ledger-warn); white-space: nowrap; }
+
+.ledger-review-empty { padding: 2rem .6rem; color: var(--ledger-soft); }
+.ledger-review-more { margin: 1rem auto 0; display: block; }
+.ledger-review-keys { display: flex; flex-wrap: wrap; gap: .3rem 1rem; margin: 1.25rem 0 0; color: var(--ledger-soft); font-size: .8em; }
+.ledger-review-keys kbd, .ledger-toast kbd { font: inherit; font-size: .9em; font-weight: 600; min-width: 1.3em; display: inline-block; text-align: center; padding: 0 .3em; margin-right: .15em; border: 1px solid var(--ledger-line); border-bottom-width: 2px; border-radius: .25rem; background: var(--ledger-paper); color: var(--ledger-ink); }
+
+/* The toast: what was done, and how to undo it. */
+.ledger-toast { position: fixed; z-index: 50; left: 50%; bottom: 1.25rem; transform: translateX(-50%); display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; max-width: min(40rem, calc(100vw - 2rem)); padding: .6rem .6rem .6rem 1rem; border-radius: var(--ledger-radius); background: var(--ledger-ink); color: var(--ledger-paper); box-shadow: 0 10px 30px rgba(0, 0, 0, .25); }
+.ledger-toast[hidden] { display: none; }
+.ledger-toast.is-error { background: var(--ledger-warn); }
+.ledger-toast-actions { display: flex; gap: .4rem; flex-wrap: wrap; }
+.ledger-toast button { font: inherit; font-weight: 600; padding: .3rem .6rem; border-radius: var(--ledger-radius); border: 1px solid rgba(255, 255, 255, .35); background: transparent; color: inherit; cursor: pointer; }
+.ledger-toast button:hover { background: rgba(255, 255, 255, .12); }
+.ledger-toast kbd { background: transparent; color: inherit; border-color: rgba(255, 255, 255, .4); }
+
+/* The category picker, opened under its row. */
+.ledger-picker { margin: .25rem 0 .5rem 3.4rem; max-width: 34rem; padding: .6rem; background: var(--ledger-paper); border: 1px solid var(--ledger-line); border-radius: var(--ledger-radius); box-shadow: 0 10px 30px rgba(0, 0, 0, .12); }
+.ledger-picker[hidden] { display: none; }
+.ledger-picker-search input { width: 100%; font: inherit; padding: .45rem .6rem; border: 1px solid var(--ledger-line); border-radius: var(--ledger-radius); background: var(--ledger-paper); color: inherit; }
+.ledger-picker-options { list-style: none; margin: .4rem 0 0; padding: 0; max-height: 18rem; overflow: auto; }
+.ledger-picker-group { padding: .5rem .5rem .2rem; color: var(--ledger-soft); font-size: .8em; font-weight: 600; }
+.ledger-picker-options [role="option"] { display: flex; justify-content: space-between; gap: 1rem; padding: .35rem .5rem; border-radius: .3rem; cursor: pointer; }
+.ledger-picker-options [role="option"] small { color: var(--ledger-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 55%; }
+.ledger-picker-options [role="option"].is-active, .ledger-picker-options [role="option"]:hover { background: var(--ledger-current); }
+.ledger-picker-options [role="option"].is-active { box-shadow: inset 3px 0 0 var(--ledger-accent); }
+.ledger-picker-options [hidden] { display: none; }
+.ledger-picker-more { display: flex; flex-wrap: wrap; gap: .5rem 1rem; margin-top: .5rem; }
+.ledger-picker-more label { display: grid; gap: .15rem; color: var(--ledger-soft); font-size: .85em; }
+.ledger-picker-more label[hidden] { display: none; }
+.ledger-picker-more select { font: inherit; color: var(--ledger-ink); padding: .3rem .45rem; border: 1px solid var(--ledger-line); border-radius: var(--ledger-radius); background: var(--ledger-paper); max-width: 16rem; }
+.ledger-picker-hint { margin: .5rem 0 0; color: var(--ledger-soft); font-size: .78em; }
+
+/* The split. */
+.ledger-split { border: 1px solid var(--ledger-line); border-radius: var(--ledger-radius); padding: 1rem 1.1rem; width: min(44rem, calc(100vw - 2rem)); background: var(--ledger-paper); color: var(--ledger-ink); }
+.ledger-split::backdrop { background: rgba(0, 0, 0, .35); }
+.ledger-split h2 { margin: 0 0 .75rem; font-size: 1.1rem; }
+.ledger-split h2 span { color: var(--ledger-soft); font-weight: 500; }
+.ledger-split-parts { display: grid; gap: .45rem; }
+.ledger-split-part { display: grid; grid-template-columns: minmax(0, 2fr) 7rem minmax(0, 1fr) 2rem; gap: .45rem; }
+.ledger-split-part select, .ledger-split-part input { font: inherit; min-width: 0; padding: .35rem .5rem; border: 1px solid var(--ledger-line); border-radius: var(--ledger-radius); background: var(--ledger-paper); color: inherit; }
+.ledger-split-part [data-part-amount] { text-align: right; font-variant-numeric: tabular-nums; }
+.ledger-split-remove { font: inherit; border: none; background: none; color: var(--ledger-soft); cursor: pointer; font-size: 1.2rem; }
+.ledger-split-total { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin: .75rem 0; }
+.ledger-split-total .is-off { color: var(--ledger-warn); font-weight: 600; }
+.ledger-split-actions { display: flex; justify-content: flex-end; gap: .5rem; }
+
+/* The rules. */
+.ledger-rules-lead { color: var(--ledger-soft); max-width: 46rem; margin: 0 0 1rem; }
+.ledger-rules { display: grid; gap: .5rem; }
+.ledger-rule { display: flex; flex-wrap: wrap; gap: .4rem .6rem; align-items: flex-end; padding: .55rem .7rem; border: 1px solid var(--ledger-line); border-radius: var(--ledger-radius); }
+.ledger-rule > * { flex: 1 1 9rem; min-width: 0; }
+.ledger-rule .ledger-rule-account { flex: 1.5 1 12rem; }
+.ledger-rule label:has(select[name="sign"]) { flex: 0 0 7rem; }
+.ledger-rule .ledger-rule-priority { flex: 0 0 4.5rem; }
+.ledger-rule .ledger-rule-enabled, .ledger-rule .ledger-rule-actions { flex: 0 0 auto; }
+.ledger-rule.is-off { opacity: .6; }
+.ledger-rule label { display: grid; gap: .15rem; color: var(--ledger-soft); font-size: .82em; }
+.ledger-rule input[type="text"], .ledger-rule input[type="number"], .ledger-rule select { font: inherit; font-size: .875rem; color: var(--ledger-ink); padding: .25rem .45rem; width: 100%; border: 1px solid var(--ledger-line); border-radius: var(--ledger-radius); background: var(--ledger-paper); min-width: 0; }
+.ledger-rule-enabled { display: flex !important; align-items: center; gap: .35rem; padding-bottom: .4rem; }
+.ledger-rule-actions { display: flex; gap: .3rem; justify-content: flex-end; }
+.ledger-rule-actions .ledger-button { padding: .3rem .7rem; }
+.ledger-rule-split { margin: 0 0 .4rem; color: var(--ledger-soft); font-size: .82em; }
+
+@media (max-width: 1024px) {
+    .ledger-row { grid-template-columns: 3rem minmax(8rem, 1fr) 6.5rem minmax(9rem, 1.6fr) 2rem; }
+    .ledger-row-actions, .ledger-row.is-current .ledger-row-actions { position: static; transform: none; box-shadow: none; padding: 0; background: none; grid-column: 2 / -1; flex-wrap: wrap; }
+    .ledger-row:hover .ledger-row-actions, .ledger-row:focus-within .ledger-row-actions { display: none; }
+    .ledger-row.is-current .ledger-row-actions { display: flex; }
+}
+
+/* A phone: label and amount, the chip below; no keyboard hints. */
+@media (max-width: 640px) {
+    .ledger-front { padding-top: .75rem; }
+    .ledger-review-bar { grid-template-columns: 1fr; }
+    .ledger-review-tools { justify-content: stretch; }
+    .ledger-review-tools .ledger-button { flex: 1; }
+    .ledger-review-filters select { flex: 1 1 8rem; min-width: 0; }
+    .ledger-review-search, .ledger-review-search input { width: 100%; }
+    .ledger-review-states { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; justify-self: stretch; }
+    .ledger-row {
+        /* Fixed tracks beside the label's: the chip's line, spanning all, would widen auto ones. */
+        grid-template-columns: minmax(0, 1fr) 7rem 1.9rem;
+        grid-template-areas: "label amount receipt" "what what what" "actions actions actions";
+        gap: .3rem .6rem;
+        padding: .55rem .5rem;
+    }
+    .ledger-row-date { display: none; }
+    .ledger-row-label { grid-area: label; }
+    .ledger-row-day { display: inline; }
+    .ledger-row-amount { grid-area: amount; }
+    .ledger-row-receipt { grid-area: receipt; }
+    .ledger-row-what { grid-area: what; flex-wrap: wrap; }
+    .ledger-row-actions, .ledger-row.is-current .ledger-row-actions { grid-area: actions; grid-column: 1 / -1; flex-wrap: wrap; }
+    .ledger-others { position: static; }
+    .ledger-others-list { left: .5rem; right: .5rem; top: calc(100% - .25rem); min-width: 0; max-width: none; }
+    .ledger-review-keys { display: none; }
+    .ledger-picker { margin-left: 0; }
+    .ledger-split-part { grid-template-columns: minmax(0, 1fr) 6rem 2rem; }
+    .ledger-split-part [data-part-label] { grid-column: 1 / 3; grid-row: 2; }
+    .ledger-rule > *, .ledger-rule .ledger-rule-account { flex-basis: 100%; }
+    .ledger-rule label:has(select[name="sign"]), .ledger-rule .ledger-rule-priority { flex: 1 1 40%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .ledger-review-progress-bar span { transition: none; }
+}

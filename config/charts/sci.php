@@ -72,6 +72,7 @@ return [
         // Classe 6 - charges
         '6061' => ['Fournitures non stockables (eau, énergie)', T::EXPENSE],
         '6063' => ['Fournitures d\'entretien et de petit équipement', T::EXPENSE],
+        '6064' => ['Fournitures administratives', T::EXPENSE],
         '611' => ['Sous-traitance générale (gestion locative)', T::EXPENSE],
         '614' => ['Charges locatives et de copropriété', T::EXPENSE],
         '615' => ['Entretien et réparations', T::EXPENSE],
@@ -80,6 +81,9 @@ return [
         '6226' => ['Honoraires', T::EXPENSE],
         '6227' => ['Frais d\'actes et de contentieux', T::EXPENSE],
         '6231' => ['Annonces et insertions', T::EXPENSE],
+        '6251' => ['Voyages et déplacements', T::EXPENSE],
+        '6256' => ['Missions', T::EXPENSE],
+        '6257' => ['Réceptions', T::EXPENSE],
         '626' => ['Frais postaux et de télécommunications', T::EXPENSE],
         '627' => ['Services bancaires et assimilés', T::EXPENSE],
         '6278' => ['Autres frais et commissions (paiements en ligne)', T::EXPENSE],

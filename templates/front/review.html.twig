@@ -1,0 +1,159 @@
+{% extends '@Ledger/front/layout.html.twig' %}
+
+{% block ledger_title %}{{ 'review.title'|trans({}, 'ledger') }}{% endblock %}
+{% block ledger_class %}ledger-front-review{% endblock %}
+
+{% block ledger_content %}
+{%- set query = {book: book.id, account: filter.account, month: filter.month, q: filter.q}|filter(v => v is not null) -%}
+<div class="ledger-review" data-ledger-review
+     data-token="{{ csrf_token(token) }}"
+     data-book="{{ book.id }}" data-state="{{ filter.state }}" data-account="{{ filter.account }}" data-month="{{ filter.month }}" data-q="{{ filter.q }}"
+     data-url-sync="{{ path('ledger_front_review_sync') }}" data-url-auto="{{ path('ledger_front_review_auto') }}"
+     data-text-undo="{{ 'review.undo'|trans({}, 'ledger') }}" data-text-error="{{ 'review.flash.error'|trans({}, 'ledger') }}"
+     data-text-left="{{ 'review.split.left'|trans({amount: '__AMOUNT__'}, 'ledger') }}" data-text-drop="{{ 'review.receipt.drop'|trans({}, 'ledger') }}"
+     data-text-rule="{{ 'review.rule.offer'|trans({label: '__LABEL__'}, 'ledger') }}" data-locale="{{ app.request.locale }}" data-currency="{{ book.currency }}">
+
+    <div class="ledger-review-bar">
+        <nav class="ledger-review-states" aria-label="{{ 'review.states'|trans({}, 'ledger') }}">
+            {%- for state in ['todo', 'reconciled', 'ignored', 'missing', 'all'] -%}
+            <a href="{{ path('ledger_front_review', query|merge({state: state})) }}" data-state="{{ state }}" {{ filter.state == state ? 'aria-current="true"' }}>
+                {{ ('review.state.' ~ state)|trans({}, 'ledger') }} <span class="ledger-count" data-count="{{ state }}">{{ counts[state] }}</span>
+            </a>
+            {%- endfor -%}
+        </nav>
+
+        <form class="ledger-review-filters" method="get" action="{{ path('ledger_front_review') }}" role="search">
+            <input type="hidden" name="book" value="{{ book.id }}">
+            <input type="hidden" name="state" value="{{ filter.state }}">
+            <label><span class="ledger-visually-hidden">{{ 'review.account'|trans({}, 'ledger') }}</span>
+                <select name="account" data-ledger-submit>
+                    <option value="">{{ 'review.all_accounts'|trans({}, 'ledger') }}</option>
+                    {% for account in bank_accounts %}<option value="{{ account.id }}" {{ filter.account == account.id ? 'selected' }}>{{ account.name }}</option>{% endfor %}
+                </select>
+            </label>
+            <label><span class="ledger-visually-hidden">{{ 'review.month'|trans({}, 'ledger') }}</span>
+                <select name="month" data-ledger-submit>
+                    <option value="">{{ 'review.all_months'|trans({}, 'ledger') }}</option>
+                    {% for month in months %}<option value="{{ month }}" {{ filter.month == month ? 'selected' }}>{{ month|ledger_month_name }}</option>{% endfor %}
+                </select>
+            </label>
+            <label class="ledger-review-search"><span class="ledger-visually-hidden">{{ 'review.search'|trans({}, 'ledger') }}</span>
+                <input type="search" name="q" value="{{ filter.q }}" placeholder="{{ 'review.search_placeholder'|trans({}, 'ledger') }}" data-ledger-search autocomplete="off">
+            </label>
+        </form>
+
+        {% if can_manage %}
+        <div class="ledger-review-tools">
+            <button type="button" class="ledger-button" data-action="sync">{{ 'review.sync'|trans({}, 'ledger') }}</button>
+            <button type="button" class="ledger-button is-primary" data-action="auto">{{ 'review.auto'|trans({}, 'ledger') }}</button>
+        </div>
+        {% endif %}
+        <div class="ledger-review-progress" data-progress>
+            <span class="ledger-review-progress-text"><span data-progress-text>{{ 'review.progress'|trans({done: progress.done, total: progress.total}, 'ledger') }}</span>{% if filter.month %} · {{ filter.month|ledger_month_name(false) }}{% endif %}</span>
+            <span class="ledger-review-progress-bar" aria-hidden="true"><span style="width: {{ progress.total ? (100 * progress.done / progress.total)|round : 0 }}%" data-progress-bar></span></span>
+        </div>
+
+    </div>
+
+    <div class="ledger-review-list" role="list" data-list aria-label="{{ 'review.lines'|trans({}, 'ledger') }}">
+        {%- for row in rows -%}
+            {{ include('@Ledger/front/_row.html.twig') }}
+        {%- else -%}
+            <p class="ledger-review-empty">{{ ('review.empty.' ~ filter.state)|trans({}, 'ledger') }}</p>
+        {%- endfor -%}
+    </div>
+    {% if more %}<button type="button" class="ledger-button ledger-review-more" data-more="{{ more }}">{{ 'review.more'|trans({}, 'ledger') }}</button>{% endif %}
+
+    <p class="ledger-review-keys" aria-hidden="true">
+        <span><kbd>j</kbd><kbd>k</kbd> {{ 'review.keys.move'|trans({}, 'ledger') }}</span>
+        <span><kbd>↵</kbd> {{ 'review.keys.accept'|trans({}, 'ledger') }}</span>
+        <span><kbd>c</kbd> {{ 'review.keys.choose'|trans({}, 'ledger') }}</span>
+        <span><kbd>s</kbd> {{ 'review.keys.split'|trans({}, 'ledger') }}</span>
+        <span><kbd>i</kbd> {{ 'review.keys.ignore'|trans({}, 'ledger') }}</span>
+        <span><kbd>u</kbd> {{ 'review.keys.undo'|trans({}, 'ledger') }}</span>
+        <span><kbd>r</kbd> {{ 'review.keys.rule'|trans({}, 'ledger') }}</span>
+        <span><kbd>a</kbd> {{ 'review.keys.attach'|trans({}, 'ledger') }}</span>
+        <span><kbd>m</kbd> {{ 'review.keys.missing'|trans({}, 'ledger') }}</span>
+        <span><kbd>/</kbd> {{ 'review.keys.search'|trans({}, 'ledger') }}</span>
+    </p>
+
+    <div class="ledger-toast" role="status" aria-live="polite" data-toast hidden>
+        <span data-toast-text></span>
+        <span class="ledger-toast-actions" data-toast-actions></span>
+    </div>
+
+    {% if can_manage %}
+    {#- The category picker: one for the page, opened under a row. -#}
+    <div class="ledger-picker" data-picker hidden role="dialog" aria-label="{{ 'review.picker.title'|trans({}, 'ledger') }}">
+        <form data-picker-form>
+            <label class="ledger-picker-search"><span class="ledger-visually-hidden">{{ 'review.picker.search'|trans({}, 'ledger') }}</span>
+                <input type="search" data-picker-search placeholder="{{ 'review.picker.search'|trans({}, 'ledger') }}" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="ledger-picker-options">
+            </label>
+            <ul class="ledger-picker-options" id="ledger-picker-options" role="listbox" data-picker-options>
+                {%- macro option(category, frequent) -%}
+                <li role="option" data-number="{{ category.number }}" data-vat="{{ category.vat }}" data-search="{{ (category.key ? ('review.category.' ~ category.key)|trans({}, 'ledger') : '') ~ ' ' ~ category.number ~ ' ' ~ category.label }}"{{ frequent ? ' data-frequent' }}>
+                    <span>{{ category.key ? ('review.category.' ~ category.key)|trans({}, 'ledger') : category.label }}</span>
+                    <small>{{ category.number }}{{ category.key ? ' · ' ~ category.label }}</small>
+                </li>
+                {%- endmacro -%}
+                {%- if categories.frequent is not empty -%}
+                <li class="ledger-picker-group" role="presentation">{{ 'review.picker.frequent'|trans({}, 'ledger') }}</li>
+                {%- for category in categories.frequent %}{{ _self.option(category, true) }}{% endfor -%}
+                {%- endif -%}
+                {%- for group, list in categories.groups -%}
+                <li class="ledger-picker-group" role="presentation">{{ ('review.picker.group.' ~ group)|trans({}, 'ledger') }}</li>
+                {%- for category in list %}{{ _self.option(category, false) }}{% endfor -%}
+                {%- endfor -%}
+            </ul>
+            <div class="ledger-picker-more">
+                <label>{{ 'review.picker.party'|trans({}, 'ledger') }}
+                    <select name="party" data-picker-party>
+                        <option value="">—</option>
+                        {% for party in parties %}<option value="{{ party.id }}">{{ party.name }}</option>{% endfor %}
+                    </select>
+                </label>
+                {%- if categories.taxes.deductible is not empty or categories.taxes.collected is not empty -%}
+                <label data-picker-vat hidden>{{ 'review.picker.vat'|trans({}, 'ledger') }}
+                    <select name="tax" data-picker-tax>
+                        <option value="">{{ 'review.picker.no_vat'|trans({}, 'ledger') }}</option>
+                        {% for tax in categories.taxes.deductible %}<option value="{{ tax.code }}" data-vat="deductible">{{ tax.label }}</option>{% endfor %}
+                        {% for tax in categories.taxes.collected %}<option value="{{ tax.code }}" data-vat="collected">{{ tax.label }}</option>{% endfor %}
+                    </select>
+                </label>
+                {%- endif -%}
+            </div>
+            <p class="ledger-picker-hint">{{ 'review.picker.hint'|trans({}, 'ledger') }}</p>
+        </form>
+    </div>
+
+    {#- The split: parts on categories or open items, adding up to the line. -#}
+    <dialog class="ledger-split" data-split aria-labelledby="ledger-split-title">
+        <form method="dialog" data-split-form>
+            <h2 id="ledger-split-title">{{ 'review.split.title'|trans({}, 'ledger') }} <span data-split-label></span></h2>
+            <div class="ledger-split-parts" data-split-parts></div>
+            <template data-split-template>
+                <div class="ledger-split-part">
+                    <select data-part-target aria-label="{{ 'review.split.target'|trans({}, 'ledger') }}">
+                        <optgroup label="{{ 'review.split.categories'|trans({}, 'ledger') }}" data-part-categories>
+                            {%- for category in categories.frequent %}<option value="account:{{ category.number }}">{{ category.key ? ('review.category.' ~ category.key)|trans({}, 'ledger') : category.label }} · {{ category.number }}</option>{% endfor -%}
+                            {%- for group, list in categories.groups %}{% for category in list|filter(c => c.number not in categories.frequent|map(f => f.number)) %}<option value="account:{{ category.number }}">{{ category.key ? ('review.category.' ~ category.key)|trans({}, 'ledger') : category.label }} · {{ category.number }}</option>{% endfor %}{% endfor -%}
+                        </optgroup>
+                        <optgroup label="{{ 'review.split.items'|trans({}, 'ledger') }}" data-part-items></optgroup>
+                    </select>
+                    <input type="text" inputmode="decimal" data-part-amount aria-label="{{ 'review.split.amount'|trans({}, 'ledger') }}" placeholder="0,00">
+                    <input type="text" data-part-label aria-label="{{ 'review.split.label'|trans({}, 'ledger') }}" placeholder="{{ 'review.split.label'|trans({}, 'ledger') }}">
+                    <button type="button" class="ledger-split-remove" data-part-remove aria-label="{{ 'review.split.remove'|trans({}, 'ledger') }}">×</button>
+                </div>
+            </template>
+            <p class="ledger-split-total"><button type="button" class="ledger-button" data-split-add>{{ 'review.split.add'|trans({}, 'ledger') }}</button> <span data-split-left></span></p>
+            <div class="ledger-split-actions">
+                <button type="button" class="ledger-button" data-split-cancel>{{ 'review.split.cancel'|trans({}, 'ledger') }}</button>
+                <button type="button" class="ledger-button is-primary" data-split-submit disabled>{{ 'review.split.submit'|trans({}, 'ledger') }}</button>
+            </div>
+        </form>
+    </dialog>
+
+    <input type="file" accept="image/*,application/pdf" data-receipt-input hidden>
+    {% endif %}
+</div>
+{% endblock %}

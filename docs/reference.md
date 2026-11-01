@@ -30,6 +30,24 @@ order: 45
 | `ledger_admin_entry_validate` | `/admin/ledger/entry/{entry}/validate` | GET | manage, link token |
 | `ledger_admin_entry_reverse` | `/admin/ledger/entry/{entry}/reverse` | GET | manage, link token |
 | `ledger_bank_webhook` | `/ledger/bank/{gateway}/webhook` | POST | public (the gateway checks the signature) |
+| `ledger_front_review` | `/comptabilite` (`?book=&state=&account=&month=&q=`) | GET | view (404 otherwise) |
+| `ledger_front_review_rows` | `/comptabilite/rows` (the same, `&offset=`) | GET | view |
+| `ledger_front_review_candidates` | `/comptabilite/lines/{id}/candidates` | GET | view |
+| `ledger_front_review_accept` | `/comptabilite/lines/{id}/accept` | POST | manage, token |
+| `ledger_front_review_categorize` | `/comptabilite/lines/{id}/categorize` | POST | manage, token |
+| `ledger_front_review_split` | `/comptabilite/lines/{id}/split` | POST | manage, token |
+| `ledger_front_review_ignore` | `/comptabilite/lines/{id}/ignore` | POST | manage, token |
+| `ledger_front_review_undo` | `/comptabilite/lines/{id}/undo` | POST | manage, token |
+| `ledger_front_review_missing` | `/comptabilite/lines/{id}/missing` | POST | manage, token |
+| `ledger_front_review_receipt` | `/comptabilite/lines/{id}/receipt` | POST | manage, token |
+| `ledger_front_review_receipt_file` | `/comptabilite/lines/{id}/receipt` | GET | view |
+| `ledger_front_review_receipt_remove` | `/comptabilite/lines/{id}/receipt/remove` | POST | manage, token |
+| `ledger_front_review_rule` | `/comptabilite/lines/{id}/rule` | POST | manage, token |
+| `ledger_front_review_rule_undo` | `/comptabilite/rules/{id}/undo` | POST | manage, token |
+| `ledger_front_review_sync`, `_sync_undo` | `/comptabilite/sync`, `/comptabilite/sync/undo` | POST | manage, token |
+| `ledger_front_review_auto`, `_auto_undo` | `/comptabilite/auto`, `/comptabilite/auto/undo` | POST | manage, token |
+| `ledger_front_rules` | `/comptabilite/regles` | GET | view |
+| `ledger_front_rule_edit` | `/comptabilite/rules/{id}` | POST | manage, token |
 
 Ids are digits; `{gateway}` is `[a-z0-9_-]+`; `{year}` four digits. "View" and "manage" are
 `LEDGER_VIEW` and `LEDGER_MANAGE` on the record (see [The back office](back-office.md)).
@@ -59,11 +77,14 @@ An unknown book is an error and exit 1. `ledger:bank:sync` prints one line per a
 | `ledger_compact(currency = 'EUR', locale = null)` | `{{ 1250000\|ledger_compact }}` | `12,5 k€` (a chart's axis, a tile) |
 | `ledger_month(locale = null)` | `{{ day\|ledger_month }}` | `oct.` |
 | `ledger_number(decimals = 0, locale = null)` | `{{ -5.7\|ledger_number(1) }}` | `-5,7` |
+| `ledger_month_name(year = true, locale = null)` | `{{ '2026-10'\|ledger_month_name }}` | `octobre 2026` |
+| `ledger_label(counterparty = null)` | `{{ 'CB DEBIT DIFFERE MONOPRIX'\|ledger_label }}` | `Monoprix` |
 
 Every filter takes the page's language (the translator's locale) when it is given none.
 
 The function `ledger_once(key)` is true the first time it is asked in a request only (the bank
-cards' shared style, written once).
+cards' shared style, written once); `ledger_category(number)` gives the key of an account's
+plain words (`627` → `bank_fees`, `review.category.bank_fees`), null without.
 
 ## Event
 
@@ -78,13 +99,16 @@ cards' shared style, written once).
 `@Ledger/admin/`: `reconcile`, `upload`, `connect_files`, `trial_balance`, `general_ledger`,
 `open_items`, `income_statement`, `balance_sheet` (`.html.twig`), the partials `_period`,
 `_report_nav`, `_statement`, `_style`, and `widget/bank`, `widget/books`, `widget/bank/` (`_layout`,
-`_style` and one per bank card). An application
+`_style` and one per bank card). `@Ledger/front/`: `layout`, `review`, `rules`, `_row`,
+`_suggestion` (the front office's screen, with `public/css/review.css` and `public/js/review.js`,
+published under `bundles/ledger/`). An application
 overrides one in `templates/bundles/LedgerBundle/admin/...`.
 
 ## Translations
 
 The domain `ledger` (ICU), in English and French (`translations/ledger+intl-icu.{en,fr}.yaml`):
-`status.*` (the bank lines' statuses), `reconcile.*`, `bank.*`, `report.*`, `dashboard.*` (the
+`status.*` (the bank lines' statuses), `reconcile.*`, `review.*` (the front office's screen,
+`review.category.*` the accounts' plain words), `bank.*`, `report.*`, `dashboard.*` (the
 bank cards: periods, series, kinds, categories, states, rhythms). The domain `admin`
 (`translations/admin.{en,fr}.yaml`): `ledger_widget.*`, the cards' names in the palette. The CRUDs' labels
 and the flash messages are written in French in the code.

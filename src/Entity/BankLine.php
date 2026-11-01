@@ -76,6 +76,20 @@ class BankLine
     #[ORM\Column(type: 'datetime_immutable')]
     private \DateTimeImmutable $createdAt;
 
+    /** Where its receipt is (Bank\Receipts: "drive:<path>" in omnibase/drive, "local:<path>" otherwise), its name and type. */
+    #[ORM\Column(length: 512, nullable: true)]
+    private ?string $receipt = null;
+
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $receiptName = null;
+
+    #[ORM\Column(length: 100, nullable: true)]
+    private ?string $receiptType = null;
+
+    /** Someone said its receipt is missing (to ask for, to find): the front office filters on it. */
+    #[ORM\Column(options: ['default' => false])]
+    private bool $receiptMissing = false;
+
     public function __construct(BankAccount $bankAccount, string $externalId, \DateTimeImmutable $bookedOn, int $amount, string $label, ?string $currency = null)
     {
         $this->bankAccount = $bankAccount;
@@ -122,6 +136,26 @@ class BankLine
     public function getReconciliations(): int { return $this->reconciliations; }
     public function countReconciliation(): self { ++$this->reconciliations; return $this; }
     public function getCreatedAt(): \DateTimeImmutable { return $this->createdAt; }
+    public function getReceipt(): ?string { return $this->receipt; }
+    public function getReceiptName(): ?string { return $this->receiptName; }
+    public function getReceiptType(): ?string { return $this->receiptType; }
+    public function hasReceipt(): bool { return null !== $this->receipt; }
+    public function isReceiptImage(): bool { return null !== $this->receiptType && str_starts_with($this->receiptType, 'image/'); }
+    public function isReceiptMissing(): bool { return $this->receiptMissing; }
+    public function setReceiptMissing(bool $missing): self { $this->receiptMissing = $missing; return $this; }
+
+    /** A receipt filed for it (its place, its name, its type); null takes it off. Filed, it is no longer missing. */
+    public function setReceipt(?string $receipt, ?string $name = null, ?string $type = null): self
+    {
+        $this->receipt = $receipt;
+        $this->receiptName = null === $receipt || null === $name ? null : mb_substr($name, 0, 255);
+        $this->receiptType = null === $receipt || null === $type ? null : mb_substr($type, 0, 100);
+        if (null !== $receipt) {
+            $this->receiptMissing = false;
+        }
+
+        return $this;
+    }
 
     /** The entry source of its next reconciliation: "bank:<id>", then "bank:<id>/2" after an undo. */
     public function getSource(): string

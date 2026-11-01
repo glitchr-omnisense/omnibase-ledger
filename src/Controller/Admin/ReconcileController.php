@@ -4,14 +4,10 @@ namespace Base\Ledger\Controller\Admin;
 
 use Base\Ledger\Entity\BankAccount;
 use Base\Ledger\Entity\BankLine;
-use Base\Ledger\Entity\EntryLine;
-use Base\Ledger\Entity\Party;
-use Base\Ledger\Entity\ReconciliationRule;
 use Base\Ledger\Enum\BankLineStatus;
 use Base\Ledger\Exception\LedgerException;
-use Base\Ledger\Reconciliation\Matcher;
+use Base\Ledger\Reconciliation\Desk;
 use Base\Ledger\Reconciliation\Reconciler;
-use Base\Ledger\Reconciliation\Suggestion;
 use Base\Ledger\Repository\BankLineRepository;
 use Base\Ledger\Repository\PartyRepository;
 use Base\Ledger\Repository\ReconciliationRuleRepository;
@@ -27,17 +23,20 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * may settle, best first - accept a suggestion, pick the open items (or a
  * rule, or a party) by hand, ignore the line -, and the lines placed
  * lately, which can be undone. Every change is a POST with its token.
+ * The day-to-day work has its own screen in the front office
+ * (Controller\Front\BankReviewController); this page stays for the back
+ * office's monitoring. Both go through Reconciliation\Desk.
  */
 #[IsGranted(LedgerVoter::VIEW)]
 #[Route('/admin/ledger')]
 class ReconcileController extends AbstractLedgerPageController
 {
     public function __construct(
-        private readonly Matcher $matcher,
         private readonly Reconciler $reconciler,
         private readonly BankLineRepository $bankLines,
         private readonly ReconciliationRuleRepository $rules,
         private readonly PartyRepository $parties,
+        private readonly Desk $desk,
     ) {
     }
 
@@ -46,14 +45,12 @@ class ReconcileController extends AbstractLedgerPageController
     {
         $account = $this->load(BankAccount::class, $bankAccount);
         $book = $account->getBook();
-        $openItems = $this->matcher->openItems($book);
-
         $pending = [];
         foreach ($this->bankLines->pending($account) as $line) {
             $pending[] = [
                 'line' => $line,
-                'suggestions' => \array_slice($this->matcher->suggest($line, $openItems), 0, 5),
-                'candidates' => array_values(array_filter($openItems, fn (EntryLine $item) => $line->getAmount() > 0 ? $item->getNet() > 0 : $item->getNet() < 0)),
+                'suggestions' => $this->desk->suggestions($line),
+                'candidates' => $this->desk->candidates($line),
             ];
         }
 
@@ -75,23 +72,11 @@ class ReconcileController extends AbstractLedgerPageController
     {
         $bankLine = $this->load(BankLine::class, $line, LedgerVoter::MANAGE);
         $this->assertPostToken($request, 'ledger_line_'.$bankLine->getId());
-        $book = $bankLine->getBook();
-
-        $items = [];
-        foreach ($request->request->all('items') as $id) {
-            $item = $this->entityManager->find(EntryLine::class, (int) $id);
-            if (null !== $item && $item->getBook() === $book) {
-                $items[] = $item;
-            }
-        }
-        $rule = $request->request->getInt('rule') > 0 ? $this->entityManager->find(ReconciliationRule::class, $request->request->getInt('rule')) : null;
-        $party = $request->request->getInt('party') > 0 ? $this->entityManager->find(Party::class, $request->request->getInt('party')) : null;
-        if ((null !== $rule && $rule->getBook() !== $book) || (null !== $party && $party->getBook() !== $book)) {
-            throw $this->createAccessDeniedException();
-        }
+        // What was picked, each of the line's book (Desk::manual() refuses another's); an empty select is none.
+        $suggestion = $this->desk->manual($bankLine, $request->request->all('items'), (int) $request->request->get('rule'), (int) $request->request->get('party'));
 
         try {
-            $entry = $this->reconciler->apply($bankLine, new Suggestion(1.0, 'Choisi à la main', $items, $rule, $party ?? $rule?->getParty()));
+            $entry = $this->desk->accept($bankLine, $suggestion);
             $this->addFlash('success', sprintf('%s : passée en %s (écriture %s).', $bankLine->getLabel(), $entry->getJournal()->getCode(), $entry->getNumber()));
         } catch (LedgerException $e) {
             $this->addFlash('error', $e->getMessage());
@@ -106,7 +91,7 @@ class ReconcileController extends AbstractLedgerPageController
         $bankLine = $this->load(BankLine::class, $line, LedgerVoter::MANAGE);
         $this->assertPostToken($request, 'ledger_line_'.$bankLine->getId());
         try {
-            $this->reconciler->ignore($bankLine);
+            $this->desk->ignore($bankLine);
         } catch (LedgerException $e) {
             $this->addFlash('error', $e->getMessage());
         }
@@ -121,7 +106,7 @@ class ReconcileController extends AbstractLedgerPageController
         $this->assertPostToken($request, 'ledger_line_'.$bankLine->getId());
         try {
             $wasReconciled = BankLineStatus::RECONCILED === $bankLine->getStatus();
-            $this->reconciler->undo($bankLine);
+            $this->desk->undo($bankLine);
             $this->addFlash('success', $wasReconciled ? sprintf('%s : écriture extournée, ligne à rapprocher.', $bankLine->getLabel()) : sprintf('%s : ligne à rapprocher.', $bankLine->getLabel()));
         } catch (LedgerException $e) {
             $this->addFlash('error', $e->getMessage());

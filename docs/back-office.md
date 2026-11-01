@@ -7,7 +7,9 @@ order: 35
 
 The screens are loaded when omnibase/admin is installed (`config/services.php` checks for
 `Base\Admin\Controller\AbstractCrudController`). Their labels are in French, as the books
-are.
+are. The back office is for monitoring and the technical side; the day-to-day reconciliation
+has its own screen in the front office ([The front office's bank screen](front-office.md)),
+and both go through `Reconciliation\Desk`.
 
 ## Who sees a book
 

@@ -3,6 +3,41 @@
 ## [Unreleased]
 
 ### Added
+- The front office's bank screen, `/comptabilite` (`Controller\Front\BankReviewController`):
+  the team's day-to-day reconciliation outside the back office, as one screen. Compact rows (the
+  date, the label as a person reads it - `Bank\Label`: « CB DEBIT DIFFERE MONOPRIX » is
+  « Monoprix », the bank's on hover -, the account, the signed amount), the best suggestion as a
+  chip with its trust in words (« sûr », « probable », « possible »), the others under
+  « autres », a category picker otherwise (`Reconciliation\Categories`: the chart in plain
+  words, `review.category.*`, the most used first, VAT where the book is liable). States with
+  their counts (« À traiter », « Rapprochées », « Ignorées », « Justificatif manquant »,
+  « Toutes »), the account, the month, a search, the month's progress. The keyboard: j / k,
+  Enter, c, s, i, u, r, a, m, /. A split over categories and open items, « Toujours classer
+  “X” ainsi » (a rule from the line, applied at once to the other lines it matches, undone in
+  one go), the rules' page (`/comptabilite/regles`), receipts dropped on a row (`Bank\Receipts`:
+  in omnibase/drive under « Comptabilité/Justificatifs/<year>/<month> » when installed, a
+  directory otherwise; `receipts.*` options), « Synchroniser » (what `ledger:bank:sync` does,
+  undone by taking out what it added) and « Rapprocher ce qui est sûr », each action an XHR
+  answering the row and how to undo it. Templates `@Ledger/front/*`, `public/css/review.css`
+  (custom properties a site sets), `public/js/review.js` (no dependency). A user who may not
+  view the book gets a 404. `docs/front-office.md`.
+- `Reconciliation\Desk`, the reconciliation's service both screens call (extracted from the
+  back office's controller, which now goes through it): suggestions, what was picked by hand,
+  accept, category, split, ignore, undo, rules from a line, the sure ones, sync - every change
+  through the Reconciler, so `BankLineReconciled` and `BankLineUnreconciled` are told as before.
+- `Suggestion::$parts` (`Reconciliation\Part`, `Suggestion::ofParts()`): what someone allocates
+  by hand, each part on an account (its base and VAT with a tax code) or against open items,
+  adding up to the line; `Reconciler::apply()` posts them, `BankLineReconciled` gets the items
+  they settled.
+- `BankLine`: a receipt (`receipt`, `receiptName`, `receiptType`) and `receiptMissing`. The
+  application needs a migration (four columns of `ledger_bank_line`).
+- `BankLineRepository::review()`, `reviewCounts()`, `span()`, `ids()`;
+  `EntryLineRepository::bankUsage()`; Twig `ledger_month_name`, `ledger_label`,
+  `ledger_category()`.
+- The SCI chart has 6064 (fournitures administratives), 6251 (voyages et déplacements), 6256
+  (missions), 6257 (réceptions): what a company card's lines go to. `ledger:chart:seed` adds them
+  to a book.
+
 - A party may be a customer (`PartyKind::CUSTOMER`, its account under 411): a client the book's
   company invoices outside any lease - for omnibase/estate's `transaction` activity, the seller or
   the buyer who owes the agency's fee. `docs/concepts.md`.
@@ -35,6 +70,10 @@
   an axis's values, `Dimension\Dimensions` asks the labelers. `docs/usage-dimensions.md`.
 
 ### Changed
+- The back office's reconciliation page stays, for monitoring: its actions go through
+  `Reconciliation\Desk`, unchanged for who uses them - except that « Choisir à la main » with
+  its rule or party left empty no longer answers 400 (Symfony's `getInt()` refuses an empty
+  string).
 - The ledger screens choose a record's book in the list of books (`LedgerAdminTrait::bookField()`,
   Symfony's EntityType): the admin's AssociationType would embed the book's form, whose VAT
   regime is an enum.

@@ -41,6 +41,31 @@ class EntryLineRepository extends ServiceEntityRepository
         return $qb->getQuery()->getResult();
     }
 
+    /**
+     * How often each account was the other side of a bank line since $since:
+     * the lines of the entries the reconciliation posted (source "bank:..."),
+     * their undoing left out - what the front office offers first.
+     *
+     * @return array<string, int> account number => lines, most used first
+     */
+    public function bankUsage(Book $book, \DateTimeImmutable $since): array
+    {
+        $rows = $this->lines($book)
+            ->select('a.number AS number, COUNT(l.id) AS n')
+            ->andWhere('e.source LIKE :bank AND e.source NOT LIKE :undo AND e.reversalOf IS NULL')->setParameter('bank', 'bank:%')->setParameter('undo', '%:undo')
+            ->andWhere('e.date >= :since')->setParameter('since', $since->setTime(0, 0))
+            ->groupBy('a.number')
+            ->orderBy('n', 'DESC')
+            ->getQuery()->getArrayResult();
+
+        $usage = [];
+        foreach ($rows as $row) {
+            $usage[(string) $row['number']] = (int) $row['n'];
+        }
+
+        return $usage;
+    }
+
     /** @return list<EntryLine> */
     public function findByLetter(Book $book, string $letter): array
     {

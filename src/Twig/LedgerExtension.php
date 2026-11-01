@@ -15,7 +15,11 @@ use Twig\Attribute\AsTwigFunction;
  * {{ 1250000|ledger_compact('EUR') }} → 12,5 k€ (a chart's axis, a tile);
  * {{ day|ledger_month }} → oct. (the locale's short month);
  * {% if ledger_once('bank-style') %} → true the first time in a request
- * only (a style shared by several cards, written once).
+ * only (a style shared by several cards, written once);
+ * {{ ledger_category('627') }} → bank_fees, the key of an account's plain
+ * words (review.category.<key> in the ledger domain), null without;
+ * {{ label|ledger_label(counterparty) }} → « Monoprix » for « CB DEBIT
+ * DIFFERE MONOPRIX ».
  *
  * Amounts, numbers and months take the page's language - the translator's
  * locale, the one its labels are in -, not intl's default, which a host may
@@ -44,6 +48,18 @@ final class LedgerExtension implements ResetInterface
         }
 
         return $this->once[$key] = true;
+    }
+
+    #[AsTwigFunction('ledger_category')]
+    public function category(string $number): ?string
+    {
+        return \Base\Ledger\Reconciliation\Categories::key($number);
+    }
+
+    #[AsTwigFilter('ledger_label')]
+    public function label(?string $label, ?string $counterparty = null): string
+    {
+        return \Base\Ledger\Bank\Label::clean((string) $label, $counterparty);
     }
 
     public function reset(): void
@@ -104,6 +120,25 @@ final class LedgerExtension implements ResetInterface
 
         return $date->format('M');
     }
+
+    /** « 2026-10 » → « octobre 2026 » (« octobre » without the year): a month of the front office's filter, in the page's language. */
+    #[AsTwigFilter('ledger_month_name')]
+    public function monthName(string $month, bool $year = true, ?string $locale = null): string
+    {
+        if (!preg_match('/^\d{4}-\d{2}$/', $month)) {
+            return $month;
+        }
+        $date = new \DateTimeImmutable($month.'-01');
+        if (class_exists(\IntlDateFormatter::class)) {
+            $formatted = (new \IntlDateFormatter($this->locale($locale), \IntlDateFormatter::NONE, \IntlDateFormatter::NONE, null, null, $year ? 'LLLL y' : 'LLLL'))->format($date);
+            if (false !== $formatted) {
+                return $formatted;
+            }
+        }
+
+        return $date->format($year ? 'F Y' : 'F');
+    }
+
     #[AsTwigFilter('ledger_money')]
     public function money(int|string|null $minor, string $currency = 'EUR', ?string $locale = null): string
     {

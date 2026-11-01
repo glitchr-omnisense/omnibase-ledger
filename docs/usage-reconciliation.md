@@ -76,6 +76,12 @@ against it:
 - **A rule**: its split ([below](#rules-and-splits)), the rule's party on the lines of the
   rule's own account.
 - **A party**: its auxiliary account (a payment on account).
+- **Parts given by hand** (`Suggestion::$parts`, a list of `Reconciliation\Part`: the front
+  office's category or split) prevail over the rest: each part, a positive amount, on its
+  account (its base and its VAT with a tax code) or against its open items - lettered with them
+  when it is exactly their total, else on the first one's account. The parts must add up to the
+  line's amount, or a `ReconciliationException`. `Suggestion::ofParts($reason, ...$parts)`
+  builds one; `BankLineReconciled` gets the open items the parts settled.
 - Nothing of these: a `ReconciliationException`.
 
 The line becomes `RECONCILED` with its entry, its reconciliation count goes up, and
@@ -102,6 +108,26 @@ the reconciliation page's button.
   locked period or a closed fiscal year. The next reconciliation posts with the source
   `bank:<id>/2`. A reconciled line taken back dispatches `BankLineUnreconciled` (`line`,
   `entry`, `reversal`), for what followed `BankLineReconciled` to be undone.
+
+## The desk
+
+`Reconciliation\Desk` is what both screens call - the back office's page and the front
+office's (see [The front office's bank screen](front-office.md)) -, every change through the
+Reconciler:
+
+- `suggestions($line, $limit = 5)` (the book's open items read once a request),
+  `candidates($line)` (the open items on the line's side), `label($line)` (`Bank\Label`);
+- `manual($line, $itemIds, $ruleId, $partyId)`: what someone picked, as a suggestion - another
+  book's record refused (`AccessDeniedException`);
+- `accept()`, `categorize($line, $account, $party, $tax)` (an account `Categories` offers),
+  `split($line, $parts)`, `ignore()`, `undo()`;
+- `ruleFrom($line, $account, $party, $tax)`: a rule from the line's cleaned label
+  (`Label::pattern()`: « MONOPRIX »), its direction, the account, the party, a tax code as a
+  one-part split - applied at once (`applyRule()`) to the book's other lines to handle that it
+  matches; `undoRule($rule, $lineIds)` puts them back and removes it;
+- `autoReconcile($accounts)` returns the lines placed, `undoLines($book, $ids)` puts them back;
+- `sync($accounts)` returns the lines added and each account's last sync before,
+  `undoSync($book, $added, $synced)` takes out those nobody placed and puts the last sync back.
 
 ## Rules and splits
 

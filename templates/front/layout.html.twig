@@ -1,0 +1,40 @@
+{% extends 'layout/layout1.html.twig' %}
+
+{#
+ # The front office's books (Controller\Front\BankReviewController): the
+ # host's layout, a heading (title, the book, its tabs) and the page. The
+ # bundle writes ledger-front-* and ledger-review-* markup with a plain
+ # structural style (public/css/review.css, on --ledger-* custom
+ # properties); the host gives it its look. public/js/review.js makes it a
+ # keyboard screen; without it, the filters and the links still work.
+ #}
+{% block title %}{% block ledger_title %}{% endblock %}{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{{ asset('bundles/ledger/css/review.css') }}">
+<div class="ledger-front {% block ledger_class %}{% endblock %}">
+    <header class="ledger-front-head">
+        <div class="ledger-front-titles">
+            <h1>{{ block('ledger_title') }}</h1>
+            <p class="ledger-front-lead">
+                {% if books|length > 1 %}
+                <label class="ledger-front-book">
+                    <span class="ledger-visually-hidden">{{ 'review.book'|trans({}, 'ledger') }}</span>
+                    <select data-ledger-goto>
+                        {% for other in books %}<option value="{{ path(app.request.attributes.get('_route'), {book: other.id}) }}" {{ other.id == book.id ? 'selected' }}>{{ other.name }}</option>{% endfor %}
+                    </select>
+                </label>
+                {% else %}{{ book.name }}{% endif %}
+            </p>
+        </div>
+        <nav class="ledger-front-tabs" aria-label="{{ 'review.tabs'|trans({}, 'ledger') }}">
+            {% set route = app.request.attributes.get('_route') %}
+            <a href="{{ path('ledger_front_review', {book: book.id}) }}" {{ route == 'ledger_front_review' ? 'aria-current="page"' }}>{{ 'review.title'|trans({}, 'ledger') }}</a>
+            <a href="{{ path('ledger_front_rules', {book: book.id}) }}" {{ route == 'ledger_front_rules' ? 'aria-current="page"' }}>{{ 'review.rules.title'|trans({}, 'ledger') }}</a>
+        </nav>
+    </header>
+
+    {% block ledger_content %}{% endblock %}
+</div>
+<script src="{{ asset('bundles/ledger/js/review.js') }}" defer></script>
+{% endblock %}

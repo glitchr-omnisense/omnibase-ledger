@@ -69,7 +69,7 @@ class Reconciler
         $in = $amount > 0;
         $abs = abs($amount);
         $piece = null;
-        foreach ($suggestion->openItems as $item) {
+        foreach ([...$suggestion->openItems, ...array_merge([], ...array_map(fn (Part $part) => $part->openItems, $suggestion->parts))] as $item) {
             $piece ??= $item->getEntry()->getPiece();
         }
 
@@ -78,7 +78,11 @@ class Reconciler
 
         /** @var list<array{account: Account, party: ?Party, items: list<EntryLine>}> $letterings */
         $letterings = [];
-        if ($suggestion->settles($amount)) {
+        /** @var list<EntryLine> $settled what the line pays, told to BankLineReconciled */
+        $settled = $suggestion->settles($amount) ? $suggestion->openItems : [];
+        if ([] !== $suggestion->parts) {
+            $settled = $this->postParts($line, $draft, $suggestion->parts, $letterings);
+        } elseif ($suggestion->settles($amount)) {
             foreach (self::byHolder($suggestion->openItems) as $holder) {
                 $net = array_sum(array_map(fn (EntryLine $item) => $item->getNet(), $holder['items']));
                 if (0 === $net) {
@@ -128,7 +132,7 @@ class Reconciler
 
         $line->setEntry($entry)->setStatus(BankLineStatus::RECONCILED)->countReconciliation();
         $this->entityManager->flush();
-        $this->dispatcher?->dispatch(new BankLineReconciled($line, $entry, $suggestion->settles($amount) ? $suggestion->openItems : []));
+        $this->dispatcher?->dispatch(new BankLineReconciled($line, $entry, $settled));
 
         return $entry;
     }
@@ -286,6 +290,61 @@ class Reconciler
         }
 
         return array_values(array_filter($parts, fn (array $part) => $part[1] > 0));
+    }
+
+    /**
+     * The parts given by hand, on $draft: each on its account (its base and
+     * its VAT with a tax code), or against its open items - lettered with
+     * them when it is exactly their total, else on the first one's account.
+     *
+     * @param list<Part>                                                       $parts
+     * @param list<array{account: Account, party: ?Party, items: list<EntryLine>}> $letterings filled with what to letter once posted
+     *
+     * @return list<EntryLine> the open items settled
+     *
+     * @throws ReconciliationException
+     */
+    private function postParts(BankLine $line, EntryDraft $draft, array $parts, array &$letterings): array
+    {
+        $amount = $line->getAmount();
+        $in = $amount > 0;
+        $total = array_sum(array_map(fn (Part $part) => $part->amount, $parts));
+        if ($total !== abs($amount)) {
+            throw new ReconciliationException(sprintf('%s: the parts add up to %s, not %s.', $line, number_format($total / 100, 2, ',', ' '), number_format(abs($amount) / 100, 2, ',', ' ')));
+        }
+
+        $settled = [];
+        foreach ($parts as $part) {
+            if ([] !== $part->openItems) {
+                $net = $part->total();
+                if (abs($net) === $part->amount && ($net > 0) === $in) {
+                    foreach (self::byHolder($part->openItems) as $holder) {
+                        $holderNet = array_sum(array_map(fn (EntryLine $item) => $item->getNet(), $holder['items']));
+                        if (0 !== $holderNet) {
+                            $draft->line($holder['account']->getNumber(), $holderNet < 0 ? -$holderNet : 0, $holderNet > 0 ? $holderNet : 0, $holder['party'], $part->label);
+                        }
+                        $letterings[] = $holder;
+                    }
+                    array_push($settled, ...$part->openItems);
+                    continue;
+                }
+                $first = $part->openItems[0];
+                $draft->line($first->getAccount()->getNumber(), $in ? 0 : $part->amount, $in ? $part->amount : 0, $first->getParty(), $part->label);
+                continue;
+            }
+
+            $number = $part->account ?? $part->party->getAccountNumber();
+            $party = $part->party;
+            if (null === $part->tax) {
+                $draft->line($number, $in ? 0 : $part->amount, $in ? $part->amount : 0, $party, $part->label);
+                continue;
+            }
+            $tax = $this->taxes?->findOneByCode($line->getBook(), $part->tax)
+                ?? throw new ReconciliationException(sprintf('%s: tax %s is not one of %s\'s.', $line, $part->tax, $line->getBook()->getName()));
+            $draft->taxed($number, $in ? 0 : $part->amount, $in ? $part->amount : 0, $tax, true, $party, $part->label);
+        }
+
+        return $settled;
     }
 
     /** @return list<array{account: Account, party: ?Party, items: list<EntryLine>}> */
