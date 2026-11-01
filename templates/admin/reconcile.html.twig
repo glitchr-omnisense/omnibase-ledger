@@ -26,6 +26,9 @@
     .ledger-pick .items { max-height: 16rem; overflow: auto; }
     .ledger-pick .row { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
     @media (max-width: 720px) { .ledger-pick .row { grid-template-columns: 1fr; } .ledger-suggestion { flex-wrap: wrap; } }
+    /* The page holds to the window: one column no wider than it (the open items' table scrolls in its own box), a long bank label breaks. */
+    .ledger { grid-template-columns: minmax(0, 1fr); }
+    .ledger-label { overflow-wrap: anywhere; }
 </style>
 <div class="ledger">
     <div class="toolbar">
@@ -43,7 +46,7 @@
     {% set line = row.line %}
     <div class="card ledger-line" id="line-{{ line.id }}">
         <div class="ledger-line-head">
-            <div>
+            <div class="ledger-label">
                 <strong>{{ line.label }}</strong>
                 <div class="muted">{{ line.bookedOn|date('d/m/Y') }}{% if line.counterpartyName %} · {{ line.counterpartyName }}{% endif %}{% if line.counterpartyIban %} · {{ line.counterpartyIban|ledger_iban }}{% endif %}{% if line.reference %} · {{ line.reference }}{% endif %}</div>
             </div>
@@ -129,7 +132,7 @@
             {% for line in done %}
             <tr>
                 <td>{{ line.bookedOn|date('d/m/Y') }}</td>
-                <td>{{ line.label }}</td>
+                <td class="ledger-label">{{ line.label }}</td>
                 <td class="num {{ line.amount > 0 ? 'in' : 'out' }}">{{ line.amount|ledger_money(line.currency) }}</td>
                 <td><span class="pill {{ line.status.value }}">{{ ('status.' ~ line.status.value)|trans({}, 'ledger') }}</span> {% if line.entry %}<span class="muted">{{ line.entry.number }}</span>{% endif %}</td>
                 <td class="num">

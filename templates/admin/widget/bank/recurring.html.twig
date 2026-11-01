@@ -9,7 +9,7 @@
 <table class="ld-table" style="margin-top: .5rem">
     {% for flow in flows %}
     <tr>
-        <td class="ld-ellipsis"><strong>{{ flow.label }}</strong><br><span class="ld-muted">{{ ('dashboard.rhythm.' ~ flow.rhythm)|trans({}, 'ledger') }} · {{ 'dashboard.recurring.times'|trans({count: flow.occurrences}, 'ledger') }}{% if flow.category %} · {{ ('dashboard.category.' ~ flow.category.value)|trans({}, 'ledger') }}{% endif %}</span></td>
+        <td class="ld-ellipsis"><strong>{{ flow.label }}</strong><span class="ld-muted">{{ ('dashboard.rhythm.' ~ flow.rhythm)|trans({}, 'ledger') }} · {{ 'dashboard.recurring.times'|trans({count: flow.occurrences}, 'ledger') }}{% if flow.category %} · {{ ('dashboard.category.' ~ flow.category.value)|trans({}, 'ledger') }}{% endif %}</span></td>
         <td class="ld-date ld-hide-narrow" title="{{ 'dashboard.recurring.next'|trans({}, 'ledger') }}"><i class="fa-regular fa-calendar"></i> {{ flow.nextOn|date('d/m') }}</td>
         <td class="ld-amount {{ flow.incoming ? 'ld-in' : 'ld-out' }}">{{ flow.incoming ? '+' }}{{ flow.amount|ledger_money(flow.bankAccount.currency) }}</td>
     </tr>
