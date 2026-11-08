@@ -8,7 +8,7 @@ order: 10
 ## Requirements
 
 What `composer.json` requires: PHP 8.2 or later, `ext-sodium`, `doctrine/orm` 2.15 or 3,
-`omnisense/omnibase` 3.0 or 4.0, `omnibridge/symfony` 1.x, `omnibase/admin`,
+`omnisense/omnibase` 3.0, 4.0 or 5.0, `omnibridge/symfony` 1.x, `omnibase/admin`,
 `omnisense/omnibank` 1.x, and `symfony/config`, `console`, `dependency-injection`,
 `doctrine-bridge`, `http-kernel`, `security-bundle` and `validator` 6, 7 or 8.
 
