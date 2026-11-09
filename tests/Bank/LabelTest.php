@@ -26,6 +26,7 @@ class LabelTest extends TestCase
         yield 'empty' => ['', null, ''];
     }
 
+    /** @dataProvider labels */
     #[\PHPUnit\Framework\Attributes\DataProvider('labels')]
     public function testALabelIsCleaned(string $label, ?string $counterparty, string $expected): void
     {
