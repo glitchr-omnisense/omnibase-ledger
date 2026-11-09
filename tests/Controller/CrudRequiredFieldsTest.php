@@ -22,7 +22,7 @@ final class CrudRequiredFieldsTest extends CrudFieldsTestCase
     {
         return [
             PartyCrudController::class => [
-                'accountNumber' => 'left empty, persistEntity() numbers it from the kind and the reference',
+                'accountNumber' => 'left empty, persistRecord() numbers it from the kind and the reference',
             ],
         ];
     }

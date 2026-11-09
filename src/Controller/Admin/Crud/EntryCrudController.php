@@ -14,7 +14,7 @@ use Base\Field\TextField;
 use Base\Ledger\Controller\Admin\LedgerAdminTrait;
 use Base\Ledger\Entity\Entry;
 use Base\Ledger\Entity\EntryLine;
-use Doctrine\ORM\EntityManagerInterface;
+use Omnibridge\Persistence\UnitOfWork;
 
 /**
  * The entries, with their lines. They are posted by the application and the
@@ -65,12 +65,12 @@ class EntryCrudController extends AbstractCrudController
     }
 
     /** The form is closed on a validated entry; a direct request is refused before the flush guard would. */
-    public function updateEntity(EntityManagerInterface $entityManager, object $entity): void
+    public function updateRecord(UnitOfWork $unitOfWork, object $entity): void
     {
         if ($entity instanceof Entry && $entity->isValidated()) {
             throw $this->createAccessDeniedException(sprintf('Entry %s is validated: reverse it instead.', $entity->getNumber()));
         }
-        parent::updateEntity($entityManager, $entity);
+        parent::updateRecord($unitOfWork, $entity);
     }
 
     public function isDeletable(object $entity): bool

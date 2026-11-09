@@ -4,6 +4,7 @@ namespace Base\Ledger\Controller\Admin\Crud;
 
 use Base\Admin\Config\Crud;
 use Base\Admin\Controller\AbstractCrudController;
+use Base\Database\UnitOfWorks;
 use Base\Field\AssociationField;
 use Base\Field\IdField;
 use Base\Field\TextField;
@@ -12,7 +13,7 @@ use Base\Ledger\Entity\Account;
 use Base\Ledger\Entity\EntryLine;
 use Base\Ledger\Entity\Party;
 use Base\Ledger\Enum\PartyKind;
-use Doctrine\ORM\EntityManagerInterface;
+use Omnibridge\Persistence\UnitOfWork;
 use Symfony\Component\Form\Extension\Core\Type\EnumType;
 
 /**
@@ -59,25 +60,26 @@ class PartyCrudController extends AbstractCrudController
         return new Party($this->defaultBook(), PartyKind::TENANT, '', '');
     }
 
-    public function persistEntity(EntityManagerInterface $entityManager, object $entity): void
+    public function persistRecord(UnitOfWork $unitOfWork, object $entity): void
     {
         if ($entity instanceof Party) {
             $book = $entity->getBook();
-            $accounts = $entityManager->getRepository(Account::class);
+            $repositories = UnitOfWorks::repositories($unitOfWork);
+            $accounts = $repositories->of(Account::class);
             if ('' === $entity->getAccountNumber()) {
                 $suffix = strtoupper(preg_replace('/[^A-Za-z0-9]/', '', (string) ($entity->getReference() ?: $entity->getName())));
                 $number = $base = substr($entity->getKind()->collective().($suffix ?: 'X'), 0, 17);
-                for ($n = 2; null !== $entityManager->getRepository(Party::class)->findOneBy(['book' => $book, 'accountNumber' => $number]); ++$n) {
+                for ($n = 2; null !== $repositories->of(Party::class)->findOneBy(['book' => $book, 'accountNumber' => $number]); ++$n) {
                     $number = $base.$n;
                 }
                 $entity->setAccountNumber($number);
             }
             if (null === $accounts->findOneBy(['book' => $book, 'number' => $entity->getAccountNumber()])) {
                 $collective = $accounts->findOneBy(['book' => $book, 'number' => $entity->getKind()->collective()]);
-                $entityManager->persist(new Account($book, $entity->getAccountNumber(), $entity->getName(), $collective?->getType()));
+                $unitOfWork->persist(new Account($book, $entity->getAccountNumber(), $entity->getName(), $collective?->getType()));
             }
         }
-        parent::persistEntity($entityManager, $entity);
+        parent::persistRecord($unitOfWork, $entity);
     }
 
     public function isDeletable(object $entity): bool

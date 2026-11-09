@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Fixed
+- The back office's screens write through omnibase/admin's hooks on the persistence the site chose: `PartyCrudController`
+  numbers a new tiers' auxiliary account and opens its account in `persistRecord()`, asking the unit of work's repositories
+  (`UnitOfWorks::repositories()`), and `EntryCrudController` refuses to save a validated entry in `updateRecord()`, in place
+  of the former `persistEntity()` and `updateEntity()` on Doctrine's entity manager, deprecated since the admin's step B1a.
+  Needs omnibase/admin from that step, which every site on omnisense/omnibase 5.x has. tests/Controller/Admin/RecordHooksTest.
+
 ### Changed
 - Accepts omnisense/omnibase 5.0 (`3.0.*-dev || 4.0.*-dev || 5.0.*-dev`; plan "omnibase agnostic", step S): the bundle runs
   unchanged on it, `Base\Bundle\AbstractBaseBundle` and the other former names it uses being aliases of
