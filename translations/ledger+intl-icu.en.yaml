@@ -26,7 +26,7 @@ reconcile:
 bank:
   upload: "Upload a statement"
   upload_lead: "CAMT.053, OFX or CSV: each transaction is imported once, then what is sure is reconciled."
-  no_omnibank: "Bank feeds need glitchr/omnibank and its \"files\" gateway."
+  no_omnibank: "Bank feeds need omnisense/omnibank and its \"files\" gateway."
   statement: "Statement"
   statement_help: "A statement already imported, or overlapping another, creates no duplicate."
   upload_submit: "Upload"

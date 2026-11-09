@@ -22,7 +22,7 @@ class ConnectionsTest extends TestCase
     protected function setUp(): void
     {
         if (!class_exists(Connection::class)) {
-            self::markTestSkipped('glitchr/omnibank is not installed.');
+            self::markTestSkipped('omnisense/omnibank is not installed.');
         }
     }
 

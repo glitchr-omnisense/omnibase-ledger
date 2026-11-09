@@ -26,7 +26,7 @@ reconcile:
 bank:
   upload: "Importer un relevé"
   upload_lead: "CAMT.053, OFX ou CSV : chaque opération n'est importée qu'une fois, puis ce qui est sûr est rapproché."
-  no_omnibank: "Les flux bancaires demandent glitchr/omnibank et sa passerelle « files »."
+  no_omnibank: "Les flux bancaires demandent omnisense/omnibank et sa passerelle « files »."
   statement: "Relevé"
   statement_help: "Un relevé déjà importé, ou qui en recouvre un autre, ne crée pas de doublon."
   upload_submit: "Importer"

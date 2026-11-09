@@ -15,7 +15,7 @@ namespace Symfony\Component\DependencyInjection\Loader\Configurator;
  * Plain autowiring over src/, as omnibase/forge does. Entities, enums,
  * models and exceptions are not services; the admin controllers and the
  * dashboard widgets are loaded only when omnibase/admin is there. The bank feeds go through
- * glitchr/omnibank's gateways when that package is installed (its bundle
+ * omnisense/omnibank's gateways when that package is installed (its bundle
  * registered): without it, the ledger, the lettering and the reports work,
  * and the bank screens say Omnibank is missing.
  */
@@ -50,7 +50,7 @@ return function (ContainerConfigurator $configurator) {
         ->exclude([$src.'/Controller/Admin/'])
         ->tag('controller.service_arguments');
 
-    // The bank accesses (glitchr/omnibank): Bank\Connections, which every
+    // The bank accesses (omnisense/omnibank): Bank\Connections, which every
     // bank service goes through, gets the Registry when the package is
     // there, null otherwise.
     if (class_exists('Omnibank\\Registry')) {

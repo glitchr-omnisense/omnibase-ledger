@@ -13,7 +13,7 @@ class ImporterTest extends InMemoryLedger
     protected function setUp(): void
     {
         if (!class_exists(BankTransaction::class)) {
-            self::markTestSkipped('glitchr/omnibank is not installed.');
+            self::markTestSkipped('omnisense/omnibank is not installed.');
         }
         parent::setUp();
     }

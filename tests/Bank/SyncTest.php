@@ -37,7 +37,7 @@ class SyncTest extends InMemoryLedger
     protected function setUp(): void
     {
         if (!class_exists(Registry::class)) {
-            self::markTestSkipped('glitchr/omnibank is not installed.');
+            self::markTestSkipped('omnisense/omnibank is not installed.');
         }
         parent::setUp();
     }

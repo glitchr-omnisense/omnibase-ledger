@@ -61,7 +61,7 @@ class Connections
     public function gateway(string $name): GatewayInterface
     {
         if (null === $this->registry) {
-            throw new BankException('Bank feeds need glitchr/omnibank: install it and register its bundle.');
+            throw new BankException('Bank feeds need omnisense/omnibank: install it and register its bundle.');
         }
         if (!$this->registry->has($name)) {
             throw new BankException(sprintf('No "%s" bank gateway is configured (omnibank.gateways): %s.', $name, implode(', ', $this->registry->names()) ?: 'none'));

@@ -9,7 +9,7 @@ use Symfony\Component\DependencyInjection\ContainerBuilder;
 /**
  * Double-entry accounting on top of omnibase: books (one per legal entity),
  * a French chart of accounts, journals, parties and their lettering, bank
- * feeds through glitchr/omnibank (statement files or bank APIs), the
+ * feeds through omnisense/omnibank (statement files or bank APIs), the
  * reconciliation of bank lines against open items with ranked suggestions,
  * and the reports a French accountant expects - trial balance, general
  * ledger, open items and the FEC.

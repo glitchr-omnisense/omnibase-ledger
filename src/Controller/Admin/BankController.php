@@ -73,7 +73,7 @@ class BankController extends AbstractLedgerPageController
         if (!\in_array($gateway, $this->connections->gateways(), true)) {
             $this->addFlash('error', $this->connections->isAvailable()
                 ? sprintf('Aucune passerelle « %s » n\'est configurée (omnibank.gateways).', $gateway)
-                : 'Les flux bancaires demandent glitchr/omnibank.');
+                : 'Les flux bancaires demandent omnisense/omnibank.');
 
             return $this->back($request);
         }

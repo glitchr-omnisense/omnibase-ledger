@@ -23,7 +23,7 @@ foreach ($candidates as $candidate) {
     // host application has an installed copy of the bundle too.
     $loader->addPsr4('Base\\Ledger\\', __DIR__.'/../src', true);
 
-    // glitchr/omnibank, when the host does not have it yet: a checkout next
+    // omnisense/omnibank, when the host does not have it yet: a checkout next
     // to this one (~/Sites/omnibank) or mounted at /srv/omnibank.
     // Its "files" gateway too (omnibank/files), for the statement upload tests.
     // Asked of the loader's prefixes, not class_exists(): a class looked
