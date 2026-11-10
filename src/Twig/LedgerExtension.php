@@ -16,6 +16,8 @@ use Twig\Attribute\AsTwigFunction;
  * {{ day|ledger_month }} → oct. (the locale's short month);
  * {% if ledger_once('bank-style') %} → true the first time in a request
  * only (a style shared by several cards, written once);
+ * {% if ledger_omnibill() %} → omnisense/omnibill is installed (the
+ * suppliers' invoices);
  * {{ ledger_category('627') }} → bank_fees, the key of an account's plain
  * words (review.category.<key> in the ledger domain), null without;
  * {{ label|ledger_label(counterparty) }} → « Monoprix » for « CB DEBIT
@@ -48,6 +50,13 @@ final class LedgerExtension implements ResetInterface
         }
 
         return $this->once[$key] = true;
+    }
+
+    /** Whether omnisense/omnibill is there: the suppliers' invoices. */
+    #[AsTwigFunction('ledger_omnibill')]
+    public function omnibill(): bool
+    {
+        return class_exists('Omnibill\\Registry');
     }
 
     #[AsTwigFunction('ledger_category')]

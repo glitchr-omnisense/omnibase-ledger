@@ -1,0 +1,116 @@
+{% extends '@Admin/layout.html.twig' %}
+
+{% block page_title %}{{ invoice.supplierName ?? invoice.filename }} {{ invoice.number }}{% endblock %}
+
+{% block content_header %}
+<div class="admin-header">
+    <span class="admin-header-icon"><i class="fa-solid fa-file-invoice"></i></span>
+    <div class="admin-header-titles">
+        <h1>{{ credit_note ? 'invoice.credit_note'|trans({}, 'ledger') ~ ' · ' : '' }}{{ invoice.supplierName ?? invoice.filename }} {{ invoice.number }}</h1>
+        <div class="admin-header-subtitle">{{ 'invoice.received_at'|trans({date: invoice.receivedAt|date('d/m/Y H:i')}, 'ledger') }} · {{ invoice.gateway ? 'invoice.via'|trans({gateway: invoice.gateway}, 'ledger') : 'invoice.by_hand'|trans({}, 'ledger') }} · {{ ('invoice.status.' ~ invoice.status.value)|trans({}, 'ledger') }}</div>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+{# One supplier's invoice: what its file says, the entry the book proposes,
+   and the decision - booked (the entry posted and validated) or refused
+   with a reason sent to the supplier's platform. #}
+{{ include('@Ledger/admin/_style.html.twig') }}
+<div class="ledger" style="max-width: 60rem">
+    <div class="toolbar">
+        <a class="btn btn-sm btn-secondary" href="{{ path('ledger_admin_invoices', {book: book.id}) }}"><i class="fa-solid fa-arrow-left"></i> {{ 'invoice.title'|trans({}, 'ledger') }}</a>
+        {% if invoice.file %}<a class="btn btn-sm btn-secondary" href="{{ path('ledger_admin_invoice_file', {id: invoice.id}) }}" target="_blank" rel="noopener"><i class="fa-solid fa-file-pdf"></i> {{ 'invoice.file'|trans({}, 'ledger') }}</a>{% endif %}
+        {% if invoice.entry %}<span class="pill reconciled">{{ 'invoice.entry'|trans({number: invoice.entry.number ?? ('#' ~ invoice.entry.id)}, 'ledger') }}</span>{% endif %}
+        {% if invoice.duplicateOf %}<span>{{ 'invoice.duplicate_of'|trans({}, 'ledger') }} <a href="{{ path('ledger_admin_invoice', {id: invoice.duplicateOf.id}) }}">{{ invoice.duplicateOf }}</a></span>{% endif %}
+    </div>
+    {% if invoice.reason %}<div class="card"><strong>{{ invoice.reason }}</strong></div>{% endif %}
+
+    <div class="statements">
+        <div class="card">
+            <table>
+                <tbody>
+                <tr><th>{{ 'invoice.supplier'|trans({}, 'ledger') }}</th><td>{{ invoice.supplierName }}{% if invoice.supplierSiren %}<div class="muted">{{ 'invoice.identifiers'|trans({siren: invoice.supplierSiren}, 'ledger') }}{% if invoice.supplierVat %} · {{ invoice.supplierVat }}{% endif %}</div>{% endif %}</td></tr>
+                <tr><th>{{ 'invoice.number'|trans({}, 'ledger') }}</th><td>{{ invoice.number }}</td></tr>
+                <tr><th>{{ 'invoice.date'|trans({}, 'ledger') }}</th><td>{{ invoice.issuedOn ? invoice.issuedOn|date('d/m/Y') : '' }}</td></tr>
+                <tr><th>{{ 'invoice.due'|trans({}, 'ledger') }}</th><td>{{ invoice.dueOn ? invoice.dueOn|date('d/m/Y') : '' }}</td></tr>
+                <tr><th>{{ 'invoice.total_excl'|trans({}, 'ledger') }}</th><td class="num">{{ invoice.totalExcl is null ? '' : invoice.totalExcl|ledger_money }}</td></tr>
+                <tr><th>{{ 'invoice.total_vat'|trans({}, 'ledger') }}</th><td class="num">{{ invoice.totalVat is null ? '' : invoice.totalVat|ledger_money }}</td></tr>
+                <tr><th>{{ 'invoice.total_incl'|trans({}, 'ledger') }}</th><td class="num"><strong>{{ invoice.totalIncl is null ? '' : invoice.totalIncl|ledger_money }}</strong></td></tr>
+                </tbody>
+            </table>
+        </div>
+        {% if invoice.vat is not empty %}
+        <div class="card">
+            <table>
+                <thead><tr><th>{{ 'invoice.vat_breakdown'|trans({}, 'ledger') }}</th><th class="num">{{ 'invoice.base'|trans({}, 'ledger') }}</th><th class="num">{{ 'invoice.total_vat'|trans({}, 'ledger') }}</th></tr></thead>
+                <tbody>
+                {% for row in invoice.vat %}
+                    <tr><td>{{ (row.rate / 100)|number_format(row.rate % 100 ? 1 : 0, ',', ' ') }} % <span class="muted">{{ row.category }}</span></td><td class="num">{{ row.base|ledger_amount ?: '0,00' }}</td><td class="num">{{ row.vat|ledger_amount ?: '0,00' }}</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if invoice.status.value != 'duplicate' and proposal.lines is not empty and invoice.status.value != 'unreadable' %}
+    <div class="card ledger-scroll" style="overflow-x: auto">
+        <strong>{{ 'invoice.proposal'|trans({}, 'ledger') }}</strong>
+        {% for warning in proposal.warnings %}<div class="pill unmatched">{{ warning }}</div>{% endfor %}
+        <table>
+            <thead><tr><th>{{ 'report.account'|trans({}, 'ledger') }}</th><th>{{ 'report.label'|trans({}, 'ledger') }}</th><th class="num">{{ 'report.debit'|trans({}, 'ledger') }}</th><th class="num">{{ 'report.credit'|trans({}, 'ledger') }}</th></tr></thead>
+            <tbody>
+            {% for line in proposal.lines %}
+                <tr><td>{{ line.account }}{% if line.tax %} <span class="muted">{{ line.tax.code }}</span>{% endif %}</td><td>{{ line.label }}</td><td class="num">{{ line.debit ? line.debit|ledger_amount : '' }}</td><td class="num">{{ line.credit ? line.credit|ledger_amount : '' }}</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    {% if invoice.status.isOpen and is_granted('LEDGER_MANAGE', invoice) %}
+    <div class="statements">
+        {% if invoice.status.value == 'proposed' %}
+        <form method="post" action="{{ path('ledger_admin_invoice_book', {id: invoice.id}) }}" class="card" style="display: grid; gap: .7rem" onsubmit="return confirm('{{ 'invoice.book_confirm'|trans({}, 'ledger')|e('js') }}')">
+            <input type="hidden" name="_token" value="{{ csrf_token('ledger_invoice_' ~ invoice.id) }}">
+            <label style="display: grid; gap: .2rem">{{ 'invoice.account'|trans({}, 'ledger') }}
+                <input class="form-control" name="account" list="ledger-invoice-accounts" value="{{ invoice.account }}" required pattern="[0-9][0-9A-Za-z]{1,19}">
+                <datalist id="ledger-invoice-accounts">{% for account in chart %}<option value="{{ account.number }}">{{ account.label }}</option>{% endfor %}</datalist>
+            </label>
+            <label style="display: grid; gap: .2rem">{{ 'invoice.party'|trans({}, 'ledger') }}
+                <select class="form-select" name="party">
+                    {% for supplier in suppliers %}<option value="{{ supplier.id }}" {{ invoice.party and invoice.party.id == supplier.id ? 'selected' }}>{{ supplier.name }} ({{ supplier.accountNumber }})</option>{% endfor %}
+                    <option value="new" {{ invoice.party ? '' : 'selected' }}>{{ 'invoice.party_new'|trans({}, 'ledger') }}</option>
+                </select>
+            </label>
+            <label style="display: grid; gap: .2rem">{{ 'invoice.entry_date'|trans({}, 'ledger') }}
+                <input class="form-control" type="date" name="date" value="{{ invoice.issuedOn ? invoice.issuedOn|date('Y-m-d') : '' }}">
+            </label>
+            <div><button class="btn btn-success" type="submit"><i class="fa-solid fa-check"></i> {{ 'invoice.book'|trans({}, 'ledger') }}</button></div>
+        </form>
+        {% endif %}
+        <form method="post" action="{{ path('ledger_admin_invoice_refuse', {id: invoice.id}) }}" class="card" style="display: grid; gap: .7rem">
+            <input type="hidden" name="_token" value="{{ csrf_token('ledger_invoice_' ~ invoice.id) }}">
+            <label style="display: grid; gap: .2rem">{{ 'invoice.reason'|trans({}, 'ledger') }}
+                <textarea class="form-control" name="reason" rows="3" maxlength="255" required></textarea>
+            </label>
+            <div><button class="btn btn-secondary" type="submit"><i class="fa-solid fa-ban"></i> {{ 'invoice.refuse'|trans({}, 'ledger') }}</button></div>
+        </form>
+    </div>
+    {% endif %}
+
+    {% if invoice.statuses is not empty %}
+    <div class="card">
+        <strong>{{ 'invoice.statuses'|trans({}, 'ledger') }}</strong>
+        <table>
+            <tbody>
+            {% for status in invoice.statuses %}
+                <tr><td>{{ status.at|date('d/m/Y H:i') }}</td><td>{{ status.status }}{% if status.reason ?? null %} · {{ status.reason }}{% endif %}{% if status.amount ?? null %} · {{ status.amount }}{% endif %}</td><td>{% if status.sent %}<span class="pill reconciled">{{ 'invoice.status_sent'|trans({}, 'ledger') }}</span>{% else %}<span class="pill suggested" title="{{ status.error ?? '' }}">{{ 'invoice.status_waiting'|trans({}, 'ledger') }}</span> <span class="muted">{{ status.error ?? '' }}</span>{% endif %}</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

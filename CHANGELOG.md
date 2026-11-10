@@ -15,6 +15,23 @@
   omnibridge/symfony's classes there. The sites on 4.x resolve as before.
 
 ### Added
+- Suppliers' invoices received through omnisense/omnibill, optional (`Omnibill/`, registered and mapped only with that
+  package; docs/usage-supplier-invoices.md): the approved platform's flows (`omnibill/afnor`) from a kept cursor
+  (`ledger:invoices:receive`, `InvoiceInbox`), or a file dropped by hand (a supplier who mails it: the `omnibill/email`
+  route carries no incoming flow). Each is read by horstoeko/zugferd (Factur-X, CII; UBL with
+  horstoeko/zugferdublbridge; `UNREADABLE` without it), never proposed twice (the same supplier and number: a
+  `DUPLICATE` pointing to the first), filed with the receipts, and proposed: the supplier matched by its SIREN, IBAN or
+  name, the account its earlier entries went to (`EntryLineRepository::accountsWith()`, else
+  `ledger.invoices.default_account`), the expense per VAT rate with the deductible VAT on the book's code, a reverse
+  charge self-assessed, everything on the expense outside VAT, a credit note the other way round. A person books it
+  (the entry posted and validated, source `supplier-invoice:<id>`, an unknown supplier created with reference
+  `siren:<SIREN>` and account 401 + its name, `Parties::partyFor()`'s new `$accountSuffix`) or refuses it with a
+  reason; a bank line settling it makes it paid (`PaidInvoiceListener` on `BankLineReconciled`). Each step is declared
+  to the platform (`taken_over`, `approved`, `refused`, `paid`), the CDAR written by the application's
+  `LifecycleMessageInterface`; a status not taken waits and is sent again. Back office: `/admin/ledger/invoices`
+  (`SupplierInvoiceController`). The application needs a migration once omnibill is installed:
+  `ledger_supplier_invoice`, `ledger_invoice_inbox`. `PartyRepository::ofKind()`; `ledger.invoices.gateway`,
+  `ledger.invoices.default_account`.
 - `Bank\Receipts::file()` and `read()`: any document of the book dated a day - a receipt, a supplier's invoice - filed
   where the receipts go (omnibase/drive's « Comptabilité/Justificatifs/<year>/<month> », or `ledger.receipts.directory`)
   and read back; `attach()` and `open()` go through them, unchanged.

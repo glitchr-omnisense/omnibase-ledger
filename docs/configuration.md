@@ -47,6 +47,15 @@ ledger:
 
         # The largest receipt taken, in bytes.
         max_size:             15728640
+
+    # Suppliers' invoices received through omnisense/omnibill (with that package only).
+    invoices:
+
+        # The omnibill gateway the invoices arrive through (an approved platform: omnibill/afnor); null: the first configured gateway that receives.
+        gateway:              null
+
+        # The expense account proposed for a supplier the book has no history with (606, 615...); null: a person chooses.
+        default_account:      null
     bank:
 
         # A sync asks again for the days before the last one: banks book late. Lines already imported are matched on their id.
@@ -66,6 +75,8 @@ ledger:
 | `receipts.audience` | string, null | `staff` | `Bank\Receipts` | the drive audience of that folder when the ledger makes it |
 | `receipts.directory` | string | `%kernel.project_dir%/var/storage/ledger/receipts` | `Bank\Receipts` | where receipts go without omnibase/drive |
 | `receipts.max_size` | int, bytes | `15728640` | `Bank\Receipts` | the largest receipt taken |
+| `invoices.gateway` | string, null | `null` | `Omnibill\Invoice\SupplierInvoices` | the omnibill gateway suppliers' invoices arrive through; null: the first that receives |
+| `invoices.default_account` | string, null | `null` | `Omnibill\Invoice\InvoiceProposer` | the expense account proposed for a supplier without history; null: a person chooses |
 | `bank.sync_overlap_days` | int, 0 or more | `5` | `Sync` | the days asked again before the last sync |
 
 ## Parameters
@@ -74,7 +85,8 @@ ledger:
 `AbstractBaseExtension::setConfiguration()`): `ledger.auto_accounts`, `ledger.chart`,
 `ledger.admin_role`, `ledger.secret`, `ledger.reconciliation` (the array),
 `ledger.reconciliation.auto_threshold`, `ledger.reconciliation.max_group_items`, `ledger.reconciliation.max_advance_days`,
-`ledger.receipts` and its `folder`, `audience`, `directory`, `max_size`, `ledger.bank`,
+`ledger.receipts` and its `folder`, `audience`, `directory`, `max_size`,
+`ledger.invoices.gateway`, `ledger.invoices.default_account`, `ledger.bank`,
 `ledger.bank.sync_overlap_days`. The services read them with `#[Autowire('%ledger.…%')]`.
 
 ## Services
@@ -90,6 +102,11 @@ service is private.
 - When `Omnibank\Registry` exists, `Bank\Connections` gets `$registry` as
   `service('Omnibank\Registry')->nullOnInvalid()`: `null` when Omnibank's bundle is not
   registered.
+- When `Omnibill\Registry` exists (omnisense/omnibill): `Omnibill/` but its entities, enums,
+  models and interfaces - the suppliers' invoices and their command and listener -, with
+  `Omnibill\Registry` as `$registry` (`nullOnInvalid()`); `LedgerExtension::prepend()` maps
+  `Omnibill/Entity/` then (mapping `LedgerOmnibill`). Without it, `Omnibill/` is excluded and its
+  admin controllers take their services as `null` and answer 404.
 - When omnibase/admin is installed: `Controller/Admin/` (tagged
   `controller.service_arguments`) and `Admin/` (the two widget types, autoconfigured as
   omnibase/admin widget types).

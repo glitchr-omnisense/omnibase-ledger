@@ -29,7 +29,12 @@ class Parties
     ) {
     }
 
-    public function partyFor(Book $book, PartyKind|string $kind, string $reference, string $name, ?string $iban = null): Party
+    /**
+     * $accountSuffix names the auxiliary account in place of the reference
+     * (401 + "EDF" for a supplier whose reference is its SIREN), made
+     * unique the same way.
+     */
+    public function partyFor(Book $book, PartyKind|string $kind, string $reference, string $name, ?string $iban = null, ?string $accountSuffix = null): Party
     {
         $kind = $kind instanceof PartyKind ? $kind : PartyKind::from(strtolower($kind));
         $key = spl_object_id($book).'|'.$reference;
@@ -53,7 +58,7 @@ class Parties
             return $party;
         }
 
-        $number = $this->accountNumber($book, $kind, $reference);
+        $number = $this->accountNumber($book, $kind, $accountSuffix ?? $reference);
         $account = $this->accounts->findOneByNumber($book, $number);
         if (null === $account) {
             $collective = $this->accounts->findOneByNumber($book, $kind->collective());

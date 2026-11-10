@@ -56,7 +56,9 @@
         "omnibank/qonto": "Qonto accounts synced through its API",
         "omnibank/powens": "Bank aggregation through Powens (consent pages, webhooks)",
         "omnibank/bridge": "Bank aggregation through Bridge (consent pages, webhooks)",
-        "symfony/lock": "Entry numbering one process at a time per book (LockFactory), on top of the unique key"
+        "symfony/lock": "Entry numbering one process at a time per book (LockFactory), on top of the unique key",
+        "omnisense/omnibill": "Suppliers' invoices received through an approved platform (omnibill/afnor) or dropped by hand, proposed as entries, their statuses sent back",
+        "horstoeko/zugferd": "Reads the suppliers' invoices: Factur-X and CII (UBL with horstoeko/zugferdublbridge)"
     },
     "scripts": {
         "test": "phpunit"

@@ -32,4 +32,10 @@ class PartyRepository extends ServiceEntityRepository
     {
         return null !== $this->findOneBy(['book' => $book, 'accountNumber' => $number]);
     }
+
+    /** @return list<Party> the book's parties of this kind, by name */
+    public function ofKind(Book $book, \Base\Ledger\Enum\PartyKind $kind): array
+    {
+        return $this->findBy(['book' => $book, 'kind' => $kind], ['name' => 'ASC']);
+    }
 }

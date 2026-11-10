@@ -1,0 +1,79 @@
+{% extends '@Admin/layout.html.twig' %}
+
+{% block page_title %}{{ 'invoice.title'|trans({}, 'ledger') }} · {{ book.name }}{% endblock %}
+
+{% block content_header %}
+<div class="admin-header">
+    <span class="admin-header-icon"><i class="fa-solid fa-file-invoice"></i></span>
+    <div class="admin-header-titles">
+        <h1>{{ 'invoice.title'|trans({}, 'ledger') }} · {{ book.name }}</h1>
+        <div class="admin-header-subtitle">{{ 'invoice.lead'|trans({}, 'ledger') }}</div>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+{# The suppliers' invoices of the book, by tab (to review, booked, paid,
+   refused, duplicates); a file dropped here is read and proposed. #}
+{{ include('@Ledger/admin/_style.html.twig') }}
+<div class="ledger">
+    {{ include('@Ledger/admin/_report_nav.html.twig', {current: 'ledger_admin_invoices'}) }}
+    {% if not available %}
+    <div class="card">{{ 'invoice.no_omnibill'|trans({}, 'ledger') }}</div>
+    {% else %}
+    {% if not readable %}<div class="card">{{ 'invoice.no_reader'|trans({}, 'ledger') }}</div>{% endif %}
+    <div class="card toolbar">
+        {% if gateway %}
+        <span>{{ 'invoice.gateway'|trans({gateway: gateway}, 'ledger') }}</span>
+        {% if is_granted('LEDGER_MANAGE', book) %}
+        <form method="post" action="{{ path('ledger_admin_invoices_receive', {book: book.id}) }}" class="inline">
+            <input type="hidden" name="_token" value="{{ csrf_token('ledger_invoices_receive_' ~ book.id) }}">
+            <button class="btn btn-sm btn-secondary" type="submit"><i class="fa-solid fa-inbox"></i> {{ 'invoice.receive'|trans({}, 'ledger') }}</button>
+        </form>
+        {% endif %}
+        {% else %}
+        <span class="muted">{{ 'invoice.no_gateway'|trans({}, 'ledger') }}</span>
+        {% endif %}
+        {% if is_granted('LEDGER_MANAGE', book) %}
+        <form method="post" enctype="multipart/form-data" action="{{ path('ledger_admin_invoices_upload', {book: book.id}) }}" class="inline toolbar">
+            <input type="hidden" name="_token" value="{{ csrf_token('ledger_invoices_upload_' ~ book.id) }}">
+            <input class="form-control form-control-sm" type="file" name="invoice" accept=".pdf,.xml" required style="max-width: 18rem" title="{{ 'invoice.upload_help'|trans({}, 'ledger') }}">
+            <button class="btn btn-sm btn-success" type="submit"><i class="fa-solid fa-file-arrow-up"></i> {{ 'invoice.upload_submit'|trans({}, 'ledger') }}</button>
+        </form>
+        {% endif %}
+    </div>
+    <div class="toolbar">
+        {% for name in tabs %}
+            {% set count = name == 'open' ? (counts.proposed ?? 0) + (counts.unreadable ?? 0) : (counts[name] ?? 0) %}
+            <a class="btn btn-sm {{ tab == name ? 'btn-primary' : 'btn-secondary' }}" href="{{ path('ledger_admin_invoices', {book: book.id, tab: name}) }}">{{ ('invoice.tab.' ~ name)|trans({}, 'ledger') }} <span class="pill">{{ count }}</span></a>
+        {% endfor %}
+    </div>
+    <div class="card ledger-scroll" style="overflow-x: auto">
+        {% if invoices is empty %}
+        <div class="muted">{{ 'invoice.none'|trans({}, 'ledger') }}</div>
+        {% else %}
+        <table>
+            <thead><tr>
+                <th>{{ 'invoice.date'|trans({}, 'ledger') }}</th>
+                <th>{{ 'invoice.supplier'|trans({}, 'ledger') }}</th>
+                <th>{{ 'invoice.number'|trans({}, 'ledger') }}</th>
+                <th class="num">{{ 'invoice.total_incl'|trans({}, 'ledger') }}</th>
+                <th></th>
+            </tr></thead>
+            <tbody>
+            {% for invoice in invoices %}
+                <tr>
+                    <td>{{ invoice.issuedOn ? invoice.issuedOn|date('d/m/Y') : invoice.receivedAt|date('d/m/Y') }}</td>
+                    <td><a href="{{ path('ledger_admin_invoice', {id: invoice.id}) }}">{{ invoice.supplierName ?? invoice.filename }}</a>{% if invoice.creditNote %} <span class="pill">{{ 'invoice.credit_note'|trans({}, 'ledger') }}</span>{% endif %}</td>
+                    <td>{{ invoice.number }}</td>
+                    <td class="num">{{ invoice.totalIncl is null ? '' : invoice.totalIncl|ledger_money }}</td>
+                    <td><span class="pill {{ invoice.status.isOpen ? 'suggested' : (invoice.status.value in ['booked', 'paid'] ? 'reconciled' : 'ignored') }}">{{ ('invoice.status.' ~ invoice.status.value)|trans({}, 'ledger') }}</span></td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

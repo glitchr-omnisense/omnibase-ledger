@@ -42,6 +42,7 @@ return function (ContainerConfigurator $configurator) {
             $src.'/Bank/Label.php',
             $src.'/Controller/Admin/',
             $src.'/Admin/',
+            $src.'/Omnibill/',
             $src.'/LedgerBundle.php',
         ]);
 
@@ -58,6 +59,22 @@ return function (ContainerConfigurator $configurator) {
             ->arg('$registry', service('Omnibank\\Registry')->nullOnInvalid());
         $services->get('Base\\Ledger\\Bank\\Webhooks')
             ->arg('$registry', service('Omnibank\\Registry')->nullOnInvalid());
+    }
+
+    // Suppliers' invoices received through omnisense/omnibill: only with that package (its
+    // entities mapped by LedgerExtension with it too). The back office's
+    // screens and the commands say what is missing without it.
+    if (class_exists('Omnibill\\Registry')) {
+        $services->load('Base\\Ledger\\Omnibill\\', $src.'/Omnibill/')
+            ->exclude([
+                $src.'/Omnibill/Entity/',
+                $src.'/Omnibill/Enum/',
+                $src.'/Omnibill/Model/',
+                $src.'/Omnibill/Reading/InvoiceReadException.php',
+                $src.'/Omnibill/Invoice/LifecycleMessageInterface.php',
+            ]);
+        $services->get('Base\\Ledger\\Omnibill\\Invoice\\SupplierInvoices')
+            ->arg('$registry', service('Omnibill\\Registry')->nullOnInvalid());
     }
 
     if (class_exists('Base\\Admin\\Controller\\AbstractCrudController') && is_dir($src.'/Controller/Admin')) {

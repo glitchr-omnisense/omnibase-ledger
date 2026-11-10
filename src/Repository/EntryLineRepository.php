@@ -66,6 +66,44 @@ class EntryLineRepository extends ServiceEntityRepository
         return $usage;
     }
 
+    /**
+     * The accounts the entries of $party went to - its usual expense (or
+     * income) account: the other lines of the entries that have a line for
+     * it, under $prefixes, the most used first; reversals left out.
+     *
+     * @param list<string> $prefixes
+     *
+     * @return array<string, int> account number => lines
+     */
+    public function accountsWith(Book $book, Party $party, array $prefixes = ['6', '2'], int $limit = 5): array
+    {
+        $entries = $this->getEntityManager()->createQueryBuilder()
+            ->select('IDENTITY(pl.entry)')->from(EntryLine::class, 'pl')
+            ->andWhere('pl.party = :party');
+        $qb = $this->lines($book)
+            ->select('a.number AS number, COUNT(l.id) AS n')
+            ->andWhere('e.id IN ('.$entries->getDQL().')')->setParameter('party', $party)
+            ->andWhere('e.reversalOf IS NULL')
+            ->groupBy('a.number')
+            ->orderBy('n', 'DESC')
+            ->setMaxResults($limit);
+        $or = [];
+        foreach (array_values($prefixes) as $i => $prefix) {
+            $or[] = 'a.number LIKE :prefix'.$i;
+            $qb->setParameter('prefix'.$i, addcslashes(Account::normalize($prefix), '%_').'%');
+        }
+        if ([] !== $or) {
+            $qb->andWhere(implode(' OR ', $or));
+        }
+
+        $accounts = [];
+        foreach ($qb->getQuery()->getArrayResult() as $row) {
+            $accounts[(string) $row['number']] = (int) $row['n'];
+        }
+
+        return $accounts;
+    }
+
     /** @return list<EntryLine> */
     public function findByLetter(Book $book, string $letter): array
     {

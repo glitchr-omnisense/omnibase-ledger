@@ -38,6 +38,20 @@ OK (111 tests, 666 assertions)
 
 Without the omnibank mount, 12 bank tests skip (111 tests, 12 skipped).
 
+omnisense/omnibank and omnisense/omnibill build on omnisense/contracts: the bootstrap registers
+it from `OMNISENSE_CONTRACTS`, `~/Sites/omnisense-contracts` or `/srv/omnisense-contracts`, and
+omnibill's `core`, `afnor`, `email`, `odoo` and `pennylane` from `OMNIBILL_PATH`,
+`~/Sites/omnibill` or `/srv/omnibill`; without omnibill its tests skip:
+
+```bash
+docker run --rm --network none \
+    -v "$PWD":/srv/demo/vendor/omnibase/ledger:ro \
+    -v ~/Sites/omnibank:/srv/omnibank:ro \
+    -v ~/Sites/omnisense-contracts:/srv/omnisense-contracts:ro \
+    -v ~/Sites/omnibill:/srv/omnibill:ro \
+    omnisense/omnibase-harness test ledger
+```
+
 ## What it checks
 
 | File | What |
@@ -58,6 +72,8 @@ Without the omnibank mount, 12 bank tests skip (111 tests, 12 skipped).
 | `Report/ReportsTest`, `Report/StatementsTest` | trial balance, general ledger, open items, compte de résultat and bilan with N-1 |
 | `Report/VatReturnTest` | the CA3's boxes on a month of sales, a credit note, purchases, a fixed asset and an intra-EU acquisition; the CA12 totals; a book outside VAT; each regime's last period |
 | `Report/DimensionsTest` | a filter keeps one home's lines, the result per home named by a labeler, a value nobody names |
+| `Omnibill/SupplierInvoicesTest` | through omnibill's afnor gateway on a MockHttpClient recording each request: an invoice received, read (CII, Factur-X), matched to its supplier by SIREN, its account from the supplier's history, filed, proposed and not posted, `taken_over` sent with the cursor kept; the same invoice never proposed twice (the same flow, another flow, the same file, another file); booked by a person (the entry and its VAT line, `approved`); an unknown supplier created when booked and proposed next time; a refusal and its reason, a status the platform could not take sent again; paid by the bank line that settles it; outside VAT, a reverse charge, a credit note, an unreadable file; the platform unreachable |
+| `Omnibill/MappingTest`, `Omnibill/ExtensionTest`, `Omnibill/TemplatesTest` | the omnibill side's tables and unique keys; its services and mapping with omnibill, the controllers' optional collaborators; its pages |
 | `Export/FecWriterTest` | the 18 columns, auxiliary accounts, amounts, the file name |
 | `Security/LedgerVoterTest` | the admin role views and manages everything; an application grants a book through `BookAccessInterface` |
 | `DependencyInjection/LedgerExtensionTest` | the defaults and the services; configured values |

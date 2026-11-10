@@ -48,6 +48,10 @@ orders stay the application's, which posts what they mean.
   the VAT return (CA3, CA12).
 - [Analytic axes](usage-dimensions.md): dimensions on entry lines, the reports filtered and
   grouped by them, the labelers.
+- [Suppliers' invoices](usage-supplier-invoices.md): the invoices received through
+  omnisense/omnibill's approved platform or dropped by hand, read, never proposed twice,
+  proposed as entries, booked or refused by a person, paid by a bank line; the statuses sent
+  back.
 - [The front office's bank screen](front-office.md): the team's day-to-day reconciliation at
   `/comptabilite` - compact rows, the keyboard, categories, splits, rules, receipts, sync.
 - [The back office](back-office.md): the screens, the pages, the dashboard widgets, who sees
