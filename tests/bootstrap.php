@@ -40,6 +40,35 @@ foreach ($candidates as $candidate) {
         }
     }
 
+    // omnisense/contracts, the kernel omnibank and omnibill build on since
+    // 2026-11-10, when the host does not have it: its checkout beside the
+    // workspace (~/Sites/omnisense-contracts) or mounted at
+    // /srv/omnisense-contracts. And omnisense/omnibill with the gateways the
+    // tests run (the e-invoices' afnor and email, the accounting software's
+    // odoo and pennylane), from OMNIBILL_PATH, ~/Sites/omnibill or
+    // /srv/omnibill: without them the omnibill tests skip.
+    $omnibill = [getenv('OMNIBILL_PATH') ?: null, __DIR__.'/../../../omnibill', '/srv/omnibill'];
+    $sources = [
+        'Omnisense\\Contracts\\' => [[getenv('OMNISENSE_CONTRACTS') ?: null, __DIR__.'/../../../omnisense-contracts', '/srv/omnisense-contracts'], ''],
+        'Omnibill\\' => [$omnibill, 'core'],
+        'Omnibill\\Afnor\\' => [$omnibill, 'afnor'],
+        'Omnibill\\Email\\' => [$omnibill, 'email'],
+        'Omnibill\\Odoo\\' => [$omnibill, 'odoo'],
+        'Omnibill\\Pennylane\\' => [$omnibill, 'pennylane'],
+    ];
+    foreach ($sources as $namespace => [$roots, $package]) {
+        if (isset($loader->getPrefixesPsr4()[$namespace])) {
+            continue;
+        }
+        foreach ($roots as $root) {
+            $directory = null === $root ? null : rtrim($root.'/'.$package, '/');
+            if (null !== $directory && is_file($directory.'/composer.json')) {
+                $loader->addPsr4($namespace, $directory);
+                break;
+            }
+        }
+    }
+
     // Its own classes (prepended: this checkout's, whatever the host installs)
     // and those of the omnibase/* bundles it requires or suggests, read beside this checkout
     // (the workspace, the harness's vendor/omnibase/) after the host's own: the
