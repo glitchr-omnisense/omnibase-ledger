@@ -15,6 +15,9 @@
   omnibridge/symfony's classes there. The sites on 4.x resolve as before.
 
 ### Added
+- `Bank\Receipts::file()` and `read()`: any document of the book dated a day - a receipt, a supplier's invoice - filed
+  where the receipts go (omnibase/drive's « Comptabilité/Justificatifs/<year>/<month> », or `ledger.receipts.directory`)
+  and read back; `attach()` and `open()` go through them, unchanged.
 - The front office's bank screen, `/comptabilite` (`Controller\Front\BankReviewController`):
   the team's day-to-day reconciliation outside the back office, as one screen. Compact rows (the
   date, the label as a person reads it - `Bank\Label`: « CB DEBIT DIFFERE MONOPRIX » is

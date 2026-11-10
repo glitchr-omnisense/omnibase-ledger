@@ -63,7 +63,7 @@ class Receipts
             throw new BankException('The receipt could not be read.');
         }
         try {
-            $place = null !== $this->share ? 'drive:'.$this->toDrive($line, $name, $stream) : 'local:'.$this->toDirectory($line, $name, $stream);
+            $place = $this->file($line->getBookedOn(), $name, $stream);
         } finally {
             if (\is_resource($stream)) {
                 fclose($stream);
@@ -93,7 +93,28 @@ class Receipts
     /** @return resource|null the receipt's content, null when the line has none or its file is gone */
     public function open(BankLine $line)
     {
-        $receipt = (string) $line->getReceipt();
+        return $this->read((string) $line->getReceipt());
+    }
+
+    /**
+     * Files a document of the book dated $on - a receipt, a supplier's
+     * invoice - where the receipts go: in omnibase/drive under the folder,
+     * the year and the month of $on, else in the directory. Returns where it
+     * is ("drive:<path>", "local:<path>"), to keep and read() again.
+     *
+     * @param resource $stream
+     *
+     * @throws BankException the file could not be written
+     */
+    public function file(\DateTimeInterface $on, string $name, $stream): string
+    {
+        return null !== $this->share ? 'drive:'.$this->toDrive($on, $name, $stream) : 'local:'.$this->toDirectory($on, $name, $stream);
+    }
+
+    /** @return resource|null a document filed by file(), null when it is gone */
+    public function read(?string $place)
+    {
+        $receipt = (string) $place;
         try {
             if (str_starts_with($receipt, 'drive:') && null !== $this->share) {
                 return $this->share->stream(substr($receipt, 6));
@@ -121,7 +142,7 @@ class Receipts
     }
 
     /** @param resource $stream */
-    private function toDrive(BankLine $line, string $name, $stream): string
+    private function toDrive(\DateTimeInterface $on, string $name, $stream): string
     {
         $folder = trim($this->folder, '/');
         $top = explode('/', $folder)[0];
@@ -131,7 +152,7 @@ class Receipts
             }
             $this->share->describe($top, $this->audience, null);
         }
-        $directory = ltrim($folder.'/'.$line->getBookedOn()->format('Y/m'), '/');
+        $directory = ltrim($folder.'/'.$on->format('Y/m'), '/');
         if (!$this->share->isDirectory($directory)) {
             $this->share->createDirectory($directory);
         }
@@ -142,9 +163,9 @@ class Receipts
     }
 
     /** @param resource $stream */
-    private function toDirectory(BankLine $line, string $name, $stream): string
+    private function toDirectory(\DateTimeInterface $on, string $name, $stream): string
     {
-        $relative = $line->getBookedOn()->format('Y/m');
+        $relative = $on->format('Y/m');
         $directory = rtrim($this->directory, '/').'/'.$relative;
         if (!is_dir($directory) && !@mkdir($directory, 0775, true) && !is_dir($directory)) {
             throw new BankException('The receipts\' directory could not be made.');
