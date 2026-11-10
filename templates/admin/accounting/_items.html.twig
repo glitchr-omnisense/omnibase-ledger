@@ -1,0 +1,24 @@
+{# Records handed to the accounting software, with what a person may do:
+   send again a refused or unreachable one, update a changed contact, mark
+   a changed entry fixed by hand. #}
+<table>
+    <thead><tr><th></th><th>{{ 'report.label'|trans({}, 'ledger') }}</th><th>{{ 'accounting.reference'|trans({}, 'ledger') }}</th><th></th><th></th></tr></thead>
+    <tbody>
+    {% for item in items %}
+        <tr>
+            <td>{{ ('accounting.kind.' ~ item.kind)|trans({}, 'ledger') }}</td>
+            <td>{% if item.entry %}{{ item.entry }}{% elseif item.party %}{{ item.party.name }}{% endif %}<div class="muted">{{ item.recordKey }}</div></td>
+            <td>{{ item.reference }}{% if item.number %} <span class="muted">{{ item.number }}</span>{% endif %}</td>
+            <td><span class="pill {{ item.state.value == 'sent' ? 'reconciled' : (item.state.value in ['refused', 'failed'] ? 'unmatched' : 'suggested') }}">{{ ('accounting.state.' ~ item.state.value)|trans({}, 'ledger') }}</span>{% if item.error %}<div class="muted">{{ item.error }}</div>{% endif %}</td>
+            <td>
+                {% if is_granted('LEDGER_MANAGE', item) and item.state.value != 'sent' %}
+                <form method="post" class="inline" action="{{ path(item.state.value == 'changed' and item.kind == 'entry' ? 'ledger_admin_accounting_acknowledge' : 'ledger_admin_accounting_retry', {id: item.id}) }}">
+                    <input type="hidden" name="_token" value="{{ csrf_token('ledger_accounting_item_' ~ item.id) }}">
+                    <button class="btn btn-sm btn-secondary" type="submit">{{ (item.state.value == 'changed' ? (item.kind == 'entry' ? 'accounting.acknowledge' : 'accounting.update') : 'accounting.retry')|trans({}, 'ledger') }}</button>
+                </form>
+                {% endif %}
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>

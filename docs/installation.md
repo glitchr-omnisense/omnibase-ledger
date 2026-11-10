@@ -105,7 +105,9 @@ The bundle ships no migration; its tables are `ledger_*` (`ledger_book`, `ledger
 `ledger_journal`, `ledger_fiscal_year`, `ledger_party`, `ledger_entry`, `ledger_entry_line`,
 `ledger_bank_connection`, `ledger_bank_account`, `ledger_bank_line`,
 `ledger_reconciliation_rule`), and with omnisense/omnibill `ledger_supplier_invoice` and
-`ledger_invoice_inbox` ([Suppliers' invoices](usage-supplier-invoices.md)):
+`ledger_invoice_inbox` ([Suppliers' invoices](usage-supplier-invoices.md)),
+`ledger_accounting_export` and `ledger_accounting_export_item` ([Exporting to the accountant's
+software](usage-accounting-export.md)):
 
 ```bash
 bin/console make:migration

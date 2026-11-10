@@ -56,6 +56,12 @@ ledger:
 
         # The expense account proposed for a supplier the book has no history with (606, 615...); null: a person chooses.
         default_account:      null
+
+    # The books exported to the accountant's software through omnisense/omnibill (with that package only).
+    accounting:
+
+        # The omnibill gateway keeping journal entries (odoo, pennylane); null: the first configured one that does.
+        gateway:              null
     bank:
 
         # A sync asks again for the days before the last one: banks book late. Lines already imported are matched on their id.
@@ -77,6 +83,7 @@ ledger:
 | `receipts.max_size` | int, bytes | `15728640` | `Bank\Receipts` | the largest receipt taken |
 | `invoices.gateway` | string, null | `null` | `Omnibill\Invoice\SupplierInvoices` | the omnibill gateway suppliers' invoices arrive through; null: the first that receives |
 | `invoices.default_account` | string, null | `null` | `Omnibill\Invoice\InvoiceProposer` | the expense account proposed for a supplier without history; null: a person chooses |
+| `accounting.gateway` | string, null | `null` | `Omnibill\Export\AccountingExporter` | the omnibill gateway the books go to; null: the first that keeps journal entries |
 | `bank.sync_overlap_days` | int, 0 or more | `5` | `Sync` | the days asked again before the last sync |
 
 ## Parameters
@@ -86,7 +93,7 @@ ledger:
 `ledger.admin_role`, `ledger.secret`, `ledger.reconciliation` (the array),
 `ledger.reconciliation.auto_threshold`, `ledger.reconciliation.max_group_items`, `ledger.reconciliation.max_advance_days`,
 `ledger.receipts` and its `folder`, `audience`, `directory`, `max_size`,
-`ledger.invoices.gateway`, `ledger.invoices.default_account`, `ledger.bank`,
+`ledger.invoices.gateway`, `ledger.invoices.default_account`, `ledger.accounting.gateway`, `ledger.bank`,
 `ledger.bank.sync_overlap_days`. The services read them with `#[Autowire('%ledger.…%')]`.
 
 ## Services
@@ -103,7 +110,8 @@ service is private.
   `service('Omnibank\Registry')->nullOnInvalid()`: `null` when Omnibank's bundle is not
   registered.
 - When `Omnibill\Registry` exists (omnisense/omnibill): `Omnibill/` but its entities, enums,
-  models and interfaces - the suppliers' invoices and their command and listener -, with
+  models and interfaces - the suppliers' invoices, the accounting export, their commands and
+  listener -, with
   `Omnibill\Registry` as `$registry` (`nullOnInvalid()`); `LedgerExtension::prepend()` maps
   `Omnibill/Entity/` then (mapping `LedgerOmnibill`). Without it, `Omnibill/` is excluded and its
   admin controllers take their services as `null` and answer 404.

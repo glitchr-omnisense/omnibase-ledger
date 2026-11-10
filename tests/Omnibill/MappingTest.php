@@ -40,11 +40,12 @@ class MappingTest extends TestCase
 
         $schema = (new SchemaTool($em))->getSchemaFromMetadata($em->getMetadataFactory()->getAllMetadata());
         $sql = implode(";\n", $schema->toSql(new MySQL80Platform()));
-        foreach (['ledger_supplier_invoice', 'ledger_invoice_inbox'] as $table) {
+        foreach (['ledger_supplier_invoice', 'ledger_invoice_inbox', 'ledger_accounting_export', 'ledger_accounting_export_item'] as $table) {
             self::assertTrue($schema->hasTable($table), $table);
         }
         self::assertStringContainsString('UNIQUE INDEX ledger_supplier_invoice_dedupe (book_id, dedupe)', $sql);
         self::assertStringContainsString('UNIQUE INDEX ledger_supplier_invoice_flow (gateway, flow_reference)', $sql);
         self::assertStringContainsString('UNIQUE INDEX ledger_invoice_inbox_gateway (gateway)', $sql);
+        self::assertStringContainsString('UNIQUE INDEX ledger_accounting_export_item_key (book_id, gateway, kind, record_key)', $sql);
     }
 }

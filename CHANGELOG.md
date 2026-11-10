@@ -15,6 +15,15 @@
   omnibridge/symfony's classes there. The sites on 4.x resolve as before.
 
 ### Added
+- The books exported to the accountant's software through omnisense/omnibill's accounting contracts (odoo, pennylane),
+  optional (docs/usage-accounting-export.md): `Omnibill\Export\AccountingExporter`, `/admin/ledger/accounting`,
+  `ledger:accounting:export`. A period's validated entries, contacts first (customers and suppliers), each record kept as
+  an `AccountingExportItem` keyed by the entry's source or the party's reference with the software's reference and the
+  fingerprint of what went: a second export is a no-op, a refusal is that record's, a run stopped by the software
+  unreachable, a key refused or a usage limit is `FAILED` and resumed by the next export of the period
+  (`AccountingExport`), a record changed since it went is flagged, never sent again on its own (a contact updated on
+  request, an entry acknowledged once corrected by hand). The application needs a migration once omnibill is installed:
+  `ledger_accounting_export`, `ledger_accounting_export_item`. `ledger.accounting.gateway`.
 - Suppliers' invoices received through omnisense/omnibill, optional (`Omnibill/`, registered and mapped only with that
   package; docs/usage-supplier-invoices.md): the approved platform's flows (`omnibill/afnor`) from a kept cursor
   (`ledger:invoices:receive`, `InvoiceInbox`), or a file dropped by hand (a supplier who mails it: the `omnibill/email`

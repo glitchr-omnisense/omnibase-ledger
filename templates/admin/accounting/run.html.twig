@@ -1,0 +1,32 @@
+{% extends '@Admin/layout.html.twig' %}
+
+{% block page_title %}{{ 'accounting.run'|trans({from: run.fromDate|date('d/m/Y'), to: run.toDate|date('d/m/Y')}, 'ledger') }}{% endblock %}
+
+{% block content_header %}
+<div class="admin-header">
+    <span class="admin-header-icon"><i class="fa-solid fa-arrow-right-arrow-left"></i></span>
+    <div class="admin-header-titles">
+        <h1>{{ 'accounting.run'|trans({from: run.fromDate|date('d/m/Y'), to: run.toDate|date('d/m/Y')}, 'ledger') }} · {{ run.gateway }}</h1>
+        <div class="admin-header-subtitle">{{ 'accounting.started'|trans({date: run.startedAt|date('d/m/Y H:i')}, 'ledger') }}{% if run.startedBy %} {{ 'accounting.by'|trans({who: run.startedBy}, 'ledger') }}{% endif %} · {{ ('accounting.state.' ~ run.state.value)|trans({}, 'ledger') }} {{ 'accounting.resumed'|trans({count: run.resumed}, 'ledger') }}</div>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+{# What one export run sent: each record, the software's reference, refused or changed. #}
+{{ include('@Ledger/admin/_style.html.twig') }}
+<div class="ledger">
+    <div class="toolbar"><a class="btn btn-sm btn-secondary" href="{{ path('ledger_admin_accounting', {book: book.id}) }}"><i class="fa-solid fa-arrow-left"></i> {{ 'accounting.title'|trans({}, 'ledger') }}</a></div>
+    {% if run.error %}<div class="card"><strong>{{ run.error }}</strong></div>{% endif %}
+    <div class="card toolbar">
+        <span>{{ 'accounting.contacts'|trans({}, 'ledger') }} <strong>{{ run.contacts }}</strong></span>
+        <span>{{ 'accounting.entries'|trans({}, 'ledger') }} <strong>{{ run.entries }}</strong></span>
+        <span>{{ 'accounting.skipped'|trans({}, 'ledger') }} <strong>{{ run.skipped }}</strong></span>
+        <span>{{ 'accounting.refused'|trans({}, 'ledger') }} <strong>{{ run.refused }}</strong></span>
+        <span>{{ 'accounting.changed'|trans({}, 'ledger') }} <strong>{{ run.changed }}</strong></span>
+    </div>
+    <div class="card ledger-scroll" style="overflow-x: auto">
+        {{ include('@Ledger/admin/accounting/_items.html.twig', {items: items}) }}
+    </div>
+</div>
+{% endblock %}

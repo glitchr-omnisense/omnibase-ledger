@@ -17,7 +17,7 @@ use Twig\Attribute\AsTwigFunction;
  * {% if ledger_once('bank-style') %} → true the first time in a request
  * only (a style shared by several cards, written once);
  * {% if ledger_omnibill() %} → omnisense/omnibill is installed (the
- * suppliers' invoices);
+ * suppliers' invoices, the accounting export);
  * {{ ledger_category('627') }} → bank_fees, the key of an account's plain
  * words (review.category.<key> in the ledger domain), null without;
  * {{ label|ledger_label(counterparty) }} → « Monoprix » for « CB DEBIT
@@ -52,7 +52,7 @@ final class LedgerExtension implements ResetInterface
         return $this->once[$key] = true;
     }
 
-    /** Whether omnisense/omnibill is there: the suppliers' invoices. */
+    /** Whether omnisense/omnibill is there: the suppliers' invoices and the accounting export. */
     #[AsTwigFunction('ledger_omnibill')]
     public function omnibill(): bool
     {

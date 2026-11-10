@@ -2,6 +2,7 @@
 
 namespace Tests\Base\Ledger\Omnibill;
 
+use Base\Ledger\Controller\Admin\AccountingExportController;
 use Base\Ledger\Controller\Admin\SupplierInvoiceController;
 use Base\Ledger\DependencyInjection\LedgerExtension;
 use Omnibill\Registry;
@@ -25,20 +26,21 @@ class ExtensionTest extends TestCase
         $extension->prepend($container);
         $extension->load([[]], $container);
 
-        foreach (['Base\\Ledger\\Omnibill\\Invoice\\SupplierInvoices', 'Base\\Ledger\\Omnibill\\Invoice\\InvoiceProposer', 'Base\\Ledger\\Omnibill\\Invoice\\PaidInvoiceListener', 'Base\\Ledger\\Omnibill\\Command\\InvoicesReceiveCommand'] as $id) {
+        foreach (['Base\\Ledger\\Omnibill\\Invoice\\SupplierInvoices', 'Base\\Ledger\\Omnibill\\Invoice\\InvoiceProposer', 'Base\\Ledger\\Omnibill\\Invoice\\PaidInvoiceListener', 'Base\\Ledger\\Omnibill\\Export\\AccountingExporter', 'Base\\Ledger\\Omnibill\\Command\\InvoicesReceiveCommand', 'Base\\Ledger\\Omnibill\\Command\\AccountingExportCommand'] as $id) {
             self::assertTrue($container->hasDefinition($id), $id);
         }
         foreach (['Base\\Ledger\\Omnibill\\Entity\\SupplierInvoice', 'Base\\Ledger\\Omnibill\\Invoice\\LifecycleMessageInterface'] as $id) {
             self::assertTrue(!$container->hasDefinition($id) || $container->getDefinition($id)->hasTag('container.excluded'), $id);
         }
         self::assertNull($container->getParameter('ledger.invoices.gateway'));
+        self::assertNull($container->getParameter('ledger.accounting.gateway'));
         $mappings = $container->getExtensionConfig('doctrine')[0]['orm']['mappings'] ?? [];
         self::assertSame('Base\\Ledger\\Omnibill\\Entity', $mappings['LedgerOmnibill']['prefix'] ?? null);
     }
 
     public function testTheControllersTakeOmnibillsSideAsOptional(): void
     {
-        foreach ([SupplierInvoiceController::class] as $controller) {
+        foreach ([SupplierInvoiceController::class, AccountingExportController::class] as $controller) {
             foreach ((new \ReflectionClass($controller))->getConstructor()->getParameters() as $parameter) {
                 $type = (string) $parameter->getType();
                 if (str_contains($type, 'Omnibill') || str_contains($type, 'Validator')) {

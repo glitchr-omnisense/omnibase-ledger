@@ -8,6 +8,7 @@
     <a class="btn btn-sm {{ current == 'ledger_admin_vat_return' ? 'btn-primary' : 'btn-secondary' }}" href="{{ path('ledger_admin_vat_return', {book: book.id}) }}"><i class="fa-solid fa-percent"></i> {{ 'report.vat_return'|trans({}, 'ledger') }}</a>
     {% if ledger_omnibill() %}
     <a class="btn btn-sm {{ current == 'ledger_admin_invoices' ? 'btn-primary' : 'btn-secondary' }}" href="{{ path('ledger_admin_invoices', {book: book.id}) }}"><i class="fa-solid fa-file-invoice"></i> {{ 'invoice.title'|trans({}, 'ledger') }}</a>
+    <a class="btn btn-sm {{ current == 'ledger_admin_accounting' ? 'btn-primary' : 'btn-secondary' }}" href="{{ path('ledger_admin_accounting', {book: book.id}) }}"><i class="fa-solid fa-arrow-right-arrow-left"></i> {{ 'accounting.title'|trans({}, 'ledger') }}</a>
     {% endif %}
     {% if year ?? null %}<a class="btn btn-sm btn-secondary" href="{{ path('ledger_admin_fec', {book: book.id, year: year}) }}"><i class="fa-solid fa-file-export"></i> FEC {{ year }}</a>{% endif %}
 </div>

@@ -12,8 +12,8 @@ use Symfony\Component\DependencyInjection\Loader\PhpFileLoader;
 class LedgerExtension extends AbstractBaseExtension implements PrependExtensionInterface
 {
     /**
-     * The suppliers' invoices (src/Omnibill/Entity) are mapped only with
-     * omnisense/omnibill: a site
+     * The suppliers' invoices and the exports to the accountant's software
+     * (src/Omnibill/Entity) are mapped only with omnisense/omnibill: a site
      * without it has none of their tables, and needs none.
      */
     public function prepend(ContainerBuilder $container): void

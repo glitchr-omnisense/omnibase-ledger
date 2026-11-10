@@ -7,12 +7,18 @@ use Base\Ledger\Entity\Book;
 use Base\Ledger\Entity\Entry;
 use Base\Ledger\Entity\Party;
 use Base\Ledger\Enum\PartyKind;
+use Base\Ledger\Omnibill\Entity\AccountingExport;
+use Base\Ledger\Omnibill\Entity\AccountingExportItem;
 use Base\Ledger\Omnibill\Entity\InvoiceInbox;
 use Base\Ledger\Omnibill\Entity\SupplierInvoice;
+use Base\Ledger\Omnibill\Enum\ExportState;
+use Base\Ledger\Omnibill\Export\AccountingExporter;
 use Base\Ledger\Omnibill\Invoice\InvoiceProposer;
 use Base\Ledger\Omnibill\Invoice\LifecycleMessageInterface;
 use Base\Ledger\Omnibill\Invoice\SupplierInvoices;
 use Base\Ledger\Omnibill\Reading\InvoiceReader;
+use Base\Ledger\Omnibill\Repository\AccountingExportItemRepository;
+use Base\Ledger\Omnibill\Repository\AccountingExportRepository;
 use Base\Ledger\Omnibill\Repository\InvoiceInboxRepository;
 use Base\Ledger\Omnibill\Repository\SupplierInvoiceRepository;
 use Base\Ledger\Repository\BookRepository;
@@ -25,7 +31,8 @@ use Tests\Base\Ledger\InMemoryLedger;
 
 /**
  * The ledger in memory (InMemoryLedger) with the omnibill side's records
- * kept in arrays too: the suppliers' invoices, and the inboxes. The gateways are omnibill's own (afnor)
+ * kept in arrays too: the suppliers' invoices, the inboxes, the export
+ * runs and their items. The gateways are omnibill's own (afnor, pennylane)
  * on a MockHttpClient that records each request: nothing leaves.
  */
 abstract class InMemoryOmnibill extends InMemoryLedger
@@ -34,6 +41,10 @@ abstract class InMemoryOmnibill extends InMemoryLedger
     protected array $supplierInvoices = [];
     /** @var list<InvoiceInbox> */
     protected array $inboxes = [];
+    /** @var list<AccountingExport> */
+    protected array $runs = [];
+    /** @var list<AccountingExportItem> */
+    protected array $items = [];
     protected string $receiptsDirectory;
     private ?EntityManagerInterface $em = null;
 
@@ -68,6 +79,8 @@ abstract class InMemoryOmnibill extends InMemoryLedger
             match (true) {
                 $entity instanceof SupplierInvoice => \in_array($entity, $this->supplierInvoices, true) || $this->supplierInvoices[] = $this->persisted($entity),
                 $entity instanceof InvoiceInbox => \in_array($entity, $this->inboxes, true) || $this->inboxes[] = $this->persisted($entity),
+                $entity instanceof AccountingExport => \in_array($entity, $this->runs, true) || $this->runs[] = $this->persisted($entity),
+                $entity instanceof AccountingExportItem => \in_array($entity, $this->items, true) || $this->items[] = $this->persisted($entity),
                 default => $ledger->persist($entity),
             };
         });
@@ -156,5 +169,21 @@ abstract class InMemoryOmnibill extends InMemoryLedger
             $this->entityManager(), $this->supplierInvoiceRepository(), $this->inboxRepository(), $this->bookRepository(), $this->proposer(), new InvoiceReader(),
             $this->posting(), new Parties($this->entityManager(), $this->partyRepository(), $this->accountRepository()), $this->receipts(), $registry, $gateway, null, $messages,
         );
+    }
+
+    protected function exporter(Registry $registry, ?string $gateway = null): AccountingExporter
+    {
+        $runs = $this->createStub(AccountingExportRepository::class);
+        $runs->method('unfinished')->willReturnCallback(fn (Book $book, string $gw, \DateTimeImmutable $from, \DateTimeImmutable $to) => array_values(array_filter(
+            array_reverse($this->runs),
+            fn (AccountingExport $r) => $r->getGateway() === $gw && $r->getFromDate() == $from->setTime(0, 0) && $r->getToDate() == $to->setTime(0, 0) && ExportState::DONE !== $r->getState(),
+        ))[0] ?? null);
+        $items = $this->createStub(AccountingExportItemRepository::class);
+        $items->method('findOneByKey')->willReturnCallback(fn (Book $book, string $gw, string $kind, string $key) => array_values(array_filter(
+            $this->items,
+            fn (AccountingExportItem $i) => $i->getGateway() === $gw && $i->getKind() === $kind && $i->getRecordKey() === $key,
+        ))[0] ?? null);
+
+        return new AccountingExporter($this->entityManager(), $this->entryRepository(), $runs, $items, registry: $registry, gateway: $gateway);
     }
 }

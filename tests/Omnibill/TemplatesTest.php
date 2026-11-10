@@ -4,6 +4,8 @@ namespace Tests\Base\Ledger\Omnibill;
 
 use Base\Ledger\Enum\PartyKind;
 use Base\Ledger\Enum\VatRegime;
+use Base\Ledger\Omnibill\Entity\AccountingExport;
+use Base\Ledger\Omnibill\Entity\AccountingExportItem;
 use Base\Ledger\Twig\LedgerExtension;
 use Symfony\Bridge\Twig\Extension\TranslationExtension;
 use Symfony\Component\Translation\Loader\YamlFileLoader;
@@ -13,7 +15,7 @@ use Twig\Loader\FilesystemLoader;
 use Twig\TwigFunction;
 
 /**
- * The suppliers' invoices pages' own block,
+ * The suppliers' invoices and the accounting export pages' own block,
  * rendered with an in-memory book and the bundle's French translations.
  */
 class TemplatesTest extends InMemoryOmnibill
@@ -79,5 +81,26 @@ class TemplatesTest extends InMemoryOmnibill
         self::assertStringContainsString('value="6061"', $html);
         self::assertStringContainsString('name="reason"', $html);
         self::assertStringContainsString('token-ledger_invoice_'.$invoice->getId(), $html);
+    }
+
+    public function testTheAccountingExportPages(): void
+    {
+        $html = $this->block('@Ledger/admin/accounting/index.html.twig', ['book' => $this->book, 'available' => false]);
+        self::assertStringContainsString('omnisense/omnibill', $html);
+
+        $run = $this->persisted(new AccountingExport($this->book, 'accountant', new \DateTimeImmutable('2026-10-01'), new \DateTimeImmutable('2026-10-31'), 'gestion'));
+        $run->count('entry')->count('refused')->fail('[pennylane] HTTP 503');
+        $item = $this->persisted(new AccountingExportItem($this->book, 'accountant', AccountingExportItem::ENTRY, 'misc:1', str_repeat('0', 64)));
+        $item->refused($run, '[pennylane] No ledger account with the number 6288.', str_repeat('0', 64));
+
+        $html = $this->block('@Ledger/admin/accounting/index.html.twig', ['book' => $this->book, 'available' => true, 'gateway' => 'accountant', 'from' => new \DateTimeImmutable('2026-10-01'), 'to' => new \DateTimeImmutable('2026-10-31'), 'year' => null, 'runs' => [$run], 'attention' => [$item]]);
+        self::assertStringContainsString('name="from" value="2026-10-01"', $html);
+        self::assertStringContainsString('6288', $html);
+        self::assertStringContainsString('Renvoyer', $html);
+        self::assertStringContainsString('Injoignable', $html);
+
+        $html = $this->block('@Ledger/admin/accounting/run.html.twig', ['book' => $this->book, 'run' => $run, 'items' => [$item]]);
+        self::assertStringContainsString('HTTP 503', $html);
+        self::assertStringContainsString('Refusé', $html);
     }
 }

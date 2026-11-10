@@ -61,7 +61,8 @@ return function (ContainerConfigurator $configurator) {
             ->arg('$registry', service('Omnibank\\Registry')->nullOnInvalid());
     }
 
-    // Suppliers' invoices received through omnisense/omnibill: only with that package (its
+    // Suppliers' invoices received and the books exported to the accountant's
+    // software, through omnisense/omnibill: only with that package (its
     // entities mapped by LedgerExtension with it too). The back office's
     // screens and the commands say what is missing without it.
     if (class_exists('Omnibill\\Registry')) {
@@ -73,8 +74,9 @@ return function (ContainerConfigurator $configurator) {
                 $src.'/Omnibill/Reading/InvoiceReadException.php',
                 $src.'/Omnibill/Invoice/LifecycleMessageInterface.php',
             ]);
-        $services->get('Base\\Ledger\\Omnibill\\Invoice\\SupplierInvoices')
-            ->arg('$registry', service('Omnibill\\Registry')->nullOnInvalid());
+        foreach (['Base\\Ledger\\Omnibill\\Invoice\\SupplierInvoices', 'Base\\Ledger\\Omnibill\\Export\\AccountingExporter'] as $service) {
+            $services->get($service)->arg('$registry', service('Omnibill\\Registry')->nullOnInvalid());
+        }
     }
 
     if (class_exists('Base\\Admin\\Controller\\AbstractCrudController') && is_dir($src.'/Controller/Admin')) {

@@ -52,6 +52,9 @@ orders stay the application's, which posts what they mean.
   omnisense/omnibill's approved platform or dropped by hand, read, never proposed twice,
   proposed as entries, booked or refused by a person, paid by a bank line; the statuses sent
   back.
+- [Exporting to the accountant's software](usage-accounting-export.md): a period's validated
+  entries and their contacts handed to Odoo or Pennylane through omnibill; never sent twice,
+  a stopped run resumed, a record changed since it went flagged.
 - [The front office's bank screen](front-office.md): the team's day-to-day reconciliation at
   `/comptabilite` - compact rows, the keyboard, categories, splits, rules, receipts, sync.
 - [The back office](back-office.md): the screens, the pages, the dashboard widgets, who sees

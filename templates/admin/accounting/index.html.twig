@@ -1,0 +1,70 @@
+{% extends '@Admin/layout.html.twig' %}
+
+{% block page_title %}{{ 'accounting.title'|trans({}, 'ledger') }} · {{ book.name }}{% endblock %}
+
+{% block content_header %}
+<div class="admin-header">
+    <span class="admin-header-icon"><i class="fa-solid fa-arrow-right-arrow-left"></i></span>
+    <div class="admin-header-titles">
+        <h1>{{ 'accounting.title'|trans({}, 'ledger') }} · {{ book.name }}</h1>
+        <div class="admin-header-subtitle">{{ 'accounting.lead'|trans({}, 'ledger') }}</div>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+{# A period exported to the accountant's software, the runs, and what waits
+   for a person: a record refused, one changed in the book since it went. #}
+{{ include('@Ledger/admin/_style.html.twig') }}
+<div class="ledger">
+    {{ include('@Ledger/admin/_report_nav.html.twig', {current: 'ledger_admin_accounting'}) }}
+    {% if not available %}
+    <div class="card">{{ 'accounting.no_omnibill'|trans({}, 'ledger') }}</div>
+    {% elseif not gateway %}
+    <div class="card">{{ 'accounting.no_gateway'|trans({}, 'ledger') }}</div>
+    {% else %}
+    {% if is_granted('LEDGER_MANAGE', book) %}
+    <form method="post" action="{{ path('ledger_admin_accounting_export', {book: book.id}) }}" class="card periods">
+        <input type="hidden" name="_token" value="{{ csrf_token('ledger_accounting_export_' ~ book.id) }}">
+        <strong style="align-self: center">{{ 'accounting.gateway'|trans({gateway: gateway}, 'ledger') }}</strong>
+        <label>{{ 'accounting.from'|trans({}, 'ledger') }} <input class="form-control form-control-sm" type="date" name="from" value="{{ from|date('Y-m-d') }}" required></label>
+        <label>{{ 'accounting.to'|trans({}, 'ledger') }} <input class="form-control form-control-sm" type="date" name="to" value="{{ to|date('Y-m-d') }}" required></label>
+        <button class="btn btn-sm btn-success" type="submit"><i class="fa-solid fa-paper-plane"></i> {{ 'accounting.export'|trans({}, 'ledger') }}</button>
+    </form>
+    {% endif %}
+
+    <div class="card ledger-scroll" style="overflow-x: auto">
+        <strong>{{ 'accounting.attention'|trans({}, 'ledger') }}</strong>
+        {% if attention is empty %}
+        <div class="muted">{{ 'accounting.attention_none'|trans({}, 'ledger') }}</div>
+        {% else %}
+        <div class="muted">{{ 'accounting.acknowledge_hint'|trans({}, 'ledger') }}</div>
+        {{ include('@Ledger/admin/accounting/_items.html.twig', {items: attention}) }}
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% if available %}
+    <div class="card ledger-scroll" style="overflow-x: auto">
+        <strong>{{ 'accounting.runs'|trans({}, 'ledger') }}</strong>
+        {% if runs is empty %}
+        <div class="muted">{{ 'accounting.none'|trans({}, 'ledger') }}</div>
+        {% else %}
+        <table>
+            <thead><tr><th></th><th>{{ 'invoice.date'|trans({}, 'ledger') }}</th><th class="num">{{ 'accounting.contacts'|trans({}, 'ledger') }}</th><th class="num">{{ 'accounting.entries'|trans({}, 'ledger') }}</th><th class="num">{{ 'accounting.skipped'|trans({}, 'ledger') }}</th><th class="num">{{ 'accounting.refused'|trans({}, 'ledger') }}</th><th class="num">{{ 'accounting.changed'|trans({}, 'ledger') }}</th><th></th></tr></thead>
+            <tbody>
+            {% for run in runs %}
+                <tr>
+                    <td><a href="{{ path('ledger_admin_accounting_run', {id: run.id}) }}">{{ 'accounting.run'|trans({from: run.fromDate|date('d/m/Y'), to: run.toDate|date('d/m/Y')}, 'ledger') }}</a> <span class="muted">{{ run.gateway }}</span></td>
+                    <td>{{ run.startedAt|date('d/m/Y H:i') }}{% if run.startedBy %} <span class="muted">{{ run.startedBy }}</span>{% endif %}</td>
+                    <td class="num">{{ run.contacts }}</td><td class="num">{{ run.entries }}</td><td class="num">{{ run.skipped }}</td><td class="num">{{ run.refused }}</td><td class="num">{{ run.changed }}</td>
+                    <td><span class="pill {{ run.state.value == 'done' ? 'reconciled' : (run.state.value == 'failed' ? 'unmatched' : 'suggested') }}" title="{{ run.error }}">{{ ('accounting.state.' ~ run.state.value)|trans({}, 'ledger') }}</span> <span class="muted">{{ 'accounting.resumed'|trans({count: run.resumed}, 'ledger') }}</span></td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

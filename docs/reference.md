@@ -36,6 +36,11 @@ order: 45
 | `ledger_admin_invoice_book` | `/admin/ledger/invoices/{id}/book` | POST | manage, token |
 | `ledger_admin_invoice_refuse` | `/admin/ledger/invoices/{id}/refuse` | POST | manage, token |
 | `ledger_admin_invoice_file` | `/admin/ledger/invoices/{id}/file` | GET | view |
+| `ledger_admin_accounting` | `/admin/ledger/accounting` (`?book=`) | GET | view (omnibill) |
+| `ledger_admin_accounting_export` | `/admin/ledger/accounting/export` (`?book=`) | POST | manage, token |
+| `ledger_admin_accounting_run` | `/admin/ledger/accounting/run/{id}` | GET | view |
+| `ledger_admin_accounting_retry` | `/admin/ledger/accounting/item/{id}/retry` | POST | manage, token |
+| `ledger_admin_accounting_acknowledge` | `/admin/ledger/accounting/item/{id}/acknowledge` | POST | manage, token |
 | `ledger_bank_webhook` | `/ledger/bank/{gateway}/webhook` | POST | public (the gateway checks the signature) |
 | `ledger_front_review` | `/comptabilite` (`?book=&state=&account=&month=&q=`) | GET | view (404 otherwise) |
 | `ledger_front_review_rows` | `/comptabilite/rows` (the same, `&offset=`) | GET | view |
@@ -68,6 +73,7 @@ Ids are digits; `{gateway}` is `[a-z0-9_-]+`; `{year}` four digits. "View" and "
 | `ledger:bank:opening` | `[book]`; `--adjust`; `--reclassify` | posts the opening entry of every bank account that has none (so the books hold the bank's balance); `--adjust` replaces one the bank no longer agrees with; `--reclassify` first moves each account onto the ledger account its kind belongs under (a loan on 164x) |
 | `ledger:bank:aggregate` | `[book]` | writes every bank account's precomputed rows again (all books, or one), one line per account: how many days, category rows, counterparty rows and recurring flows |
 | `ledger:invoices:receive` | `[gateway]`; `--file=` / `-f` (repeatable); `--book=` / `-b`; `--pages=` / `-p` (`10`) | with omnibill: receives the suppliers' invoices since the kept cursor and proposes them, then sends the statuses still waiting; `--file` takes files in instead; exit 1 when the gateway failed |
+| `ledger:accounting:export` | `book`; `--from=`, `--to=` (the last month by default); `--gateway=` / `-g` | with omnibill: the period's validated entries and their contacts to the accounting software, resuming a run of that period that stopped; exit 1 when it stopped, a warning when something was refused or changed |
 | `ledger:fec:export` | `book`, `year` (the year the fiscal year closes in); `--dir=` / `-d` (`.`); `--stdout` | writes `<SIREN>FEC<YYYYMMDD>.txt`, or prints it; a year that is not digits is exit 2 |
 
 An unknown book is an error and exit 1. `ledger:bank:sync` prints one line per account:
