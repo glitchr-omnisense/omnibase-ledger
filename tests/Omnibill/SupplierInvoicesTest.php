@@ -10,11 +10,13 @@ use Base\Ledger\Model\EntryDraft;
 use Base\Ledger\Omnibill\Entity\SupplierInvoice;
 use Base\Ledger\Omnibill\Enum\SupplierInvoiceStatus;
 use Base\Ledger\Omnibill\Invoice\PaidInvoiceListener;
+use Base\Ledger\Omnibill\Invoice\SupplierInvoices;
 use Base\Ledger\Reconciliation\Reconciler;
 use Omnibill\Afnor\AfnorGatewayFactory;
 use Omnibill\Model\Flow;
 use Omnibill\Model\StatusChange;
 use Omnibill\Registry;
+use Omnibill\Request\SetStatus;
 use Omnibill\Writer\LifecycleMessageWriterInterface;
 use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\HttpClient\MockHttpClient;
@@ -26,7 +28,8 @@ use Symfony\Component\HttpClient\Response\MockResponse;
  * records each request - or dropped by hand: read, never proposed twice,
  * booked only by a person, refused with a reason, paid by a bank line,
  * each step declared back to the platform; only the invoices read from the
- * inbox; a status whose answer was lost left to a person.
+ * inbox; a status whose answer was lost looked up by its key at the next
+ * pass, or left to a person where the platform cannot settle it.
  */
 class SupplierInvoicesTest extends InMemoryOmnibill
 {
@@ -39,8 +42,12 @@ class SupplierInvoicesTest extends InMemoryOmnibill
     /** @var list<string> the flows the next search lists: a supplier's invoice, or "lc-..." a status about one of the application's own */
     private array $inbox = [];
     private bool $down = false;
-    /** The next status posted is taken by the platform, then answered 503. */
-    private bool $lostStatus = false;
+    /** What befalls the next status posted: "lost" (taken by the platform, then a 503), "down" (a 503, nothing taken). */
+    private ?string $onStatus = null;
+    /** What befalls a search by trackingId: "refused" (a 400), "down" (a 503). */
+    private ?string $onSearch = null;
+    /** @var list<array{flowId: string, trackingId: ?string, submittedAt: string}> the status messages the platform holds */
+    private array $sent = [];
 
     protected function setUp(): void
     {
@@ -51,7 +58,8 @@ class SupplierInvoicesTest extends InMemoryOmnibill
         $this->account('606', 'Achats non stockés');
     }
 
-    private function registry(): Registry
+    /** @param bool $lookup false: a gateway that cannot find a flow again (its find_flow action taken out) */
+    private function registry(bool $lookup = true): Registry
     {
         $http = new MockHttpClient(function (string $method, string $url, array $options): MockResponse {
             $body = (string) ($options['body'] ?? '');
@@ -62,6 +70,14 @@ class SupplierInvoicesTest extends InMemoryOmnibill
             }
             if ($this->down) {
                 return new MockResponse('', ['http_code' => 503]);
+            }
+            if ('POST' === $method && str_ends_with($path, '/v1/flows/search') && null !== ($tracking = json_decode($body, true)['where']['trackingId'] ?? null)) {
+                if (null !== $this->onSearch) {
+                    return 'refused' === $this->onSearch ? new MockResponse('{"errorCode":"INVALID_CRITERIA","errorMessage":"trackingId is not a search criterion"}', ['http_code' => 400]) : new MockResponse('', ['http_code' => 503]);
+                }
+                $results = array_map(static fn (array $f) => $f + ['name' => 'CDV.xml', 'flowSyntax' => 'CDAR', 'flowType' => 'SupplierInvoiceLC', 'flowDirection' => 'Out', 'acknowledgement' => ['status' => 'Ok']], array_values(array_filter($this->sent, static fn (array $f) => $f['trackingId'] === $tracking)));
+
+                return new MockResponse((string) json_encode(['limit' => 100, 'results' => $results]));
             }
             if ('POST' === $method && str_ends_with($path, '/v1/flows/search')) {
                 $results = array_map(static fn (string $id) => ['flowId' => $id, 'submittedAt' => '2026-11-03T08:00:00Z', 'updatedAt' => '2026-11-03T08:00:01Z', 'name' => $id.'.xml', 'processingRule' => 'B2B', 'flowSyntax' => str_starts_with($id, 'lc-') ? 'CDAR' : 'CII', 'flowProfile' => 'CIUS', 'flowType' => str_starts_with($id, 'lc-') ? 'CustomerInvoiceLC' : 'SupplierInvoice', 'flowDirection' => 'In'], $this->inbox);
@@ -76,9 +92,15 @@ class SupplierInvoicesTest extends InMemoryOmnibill
                 return new MockResponse($this->flows[$m[1]]);
             }
             if ('POST' === $method && str_ends_with($path, '/v1/flows')) {
-                if ($this->lostStatus) {
-                    $this->lostStatus = false;
-
+                $fate = $this->onStatus;
+                $this->onStatus = null;
+                if ('down' === $fate) {
+                    return new MockResponse('', ['http_code' => 503]);
+                }
+                // The flowInfo part of the multipart body: the key the message went with.
+                $info = preg_match('~name="flowInfo"\r\nContent-Type: application/json\r\n\r\n(\{.*?\})\r\n~s', $body, $m) ? json_decode($m[1], true) : [];
+                $this->sent[] = ['flowId' => 'cdar-'.\count($this->calls), 'trackingId' => $info['trackingId'] ?? null, 'submittedAt' => '2026-11-03T09:00:00Z'];
+                if ('lost' === $fate) {
                     return new MockResponse('', ['http_code' => 503]);
                 }
 
@@ -91,7 +113,7 @@ class SupplierInvoicesTest extends InMemoryOmnibill
         return new Registry([new AfnorGatewayFactory($http)], ['platform' => ['factory' => 'afnor', 'options' => [
             'flow_url' => self::FLOW_URL, 'directory_url' => 'https://api.directory.pa.example/directory-service', 'token_url' => 'https://auth.pa.example/token',
             'client_id' => 'sci', 'client_secret' => 's3cret',
-        ]]]);
+        ] + ($lookup ? [] : ['omnibill.action.find_flow' => null])]]);
     }
 
     /**
@@ -122,6 +144,47 @@ class SupplierInvoicesTest extends InMemoryOmnibill
         }
 
         return $posted;
+    }
+
+    /** @return list<string> the searches by trackingId made, their keys in order */
+    private function lookups(): array
+    {
+        $keys = [];
+        foreach ($this->calls as [$method, $url, $body]) {
+            if ('POST' === $method && str_ends_with($url, '/v1/flows/search') && null !== ($key = json_decode($body, true)['where']['trackingId'] ?? null)) {
+                $keys[] = $key;
+            }
+        }
+
+        return $keys;
+    }
+
+    /** A status's message goes with a key of its own since omnibill 1.3 (SetStatus::$trackingId). */
+    private function requiresTrackingIds(): void
+    {
+        if (!property_exists(SetStatus::class, 'trackingId')) {
+            self::markTestSkipped('omnibill 1.3 gives a status its key (SetStatus::$trackingId): before, every lost status is a person\'s to settle.');
+        }
+    }
+
+    /** The invoice's first status's answer lost $minutes ago: the platform's search has had that long to show it. */
+    private static function lostAgo(SupplierInvoice $invoice, int $minutes, int $index = 0): void
+    {
+        $statuses = $invoice->getStatuses();
+        $statuses[$index]['lost'] = (new \DateTimeImmutable(sprintf('-%d minutes', $minutes)))->format(\DATE_ATOM);
+        (new \ReflectionProperty($invoice, 'statuses'))->setValue($invoice, $statuses);
+    }
+
+    /** An invoice received from the platform, its taken-over status befallen by $fate ("lost", "down"). */
+    private function received(SupplierInvoices $invoices, ?string $fate): SupplierInvoice
+    {
+        $this->edfParty();
+        $this->flows['f-1'] = Invoices::cii();
+        $this->inbox = ['f-1'];
+        $this->onStatus = $fate;
+        $invoices->receive();
+
+        return $this->supplierInvoices[0];
     }
 
     private function edfParty(): \Base\Ledger\Entity\Party
@@ -334,23 +397,21 @@ class SupplierInvoicesTest extends InMemoryOmnibill
         self::assertSame('cursor-2', $this->inboxes[0]->getCursor());
     }
 
-    public function testAStatusWhoseAnswerWasLostWaitsForAPersonAndIsNeverSentAgainOnItsOwn(): void
+    public function testAStatusWhoseAnswerWasLostOnAGatewayThatCannotLookItUpWaitsForAPerson(): void
     {
-        $this->edfParty();
-        $invoices = $this->supplierInvoices($this->registry(), null, $this->messages());
-        $this->flows['f-1'] = Invoices::cii();
-        $this->inbox = ['f-1'];
-        $this->lostStatus = true;
-        $invoices->receive();
-        $invoice = $this->supplierInvoices[0];
+        $invoices = $this->supplierInvoices($this->registry(false), null, $this->messages());
+        $invoice = $this->received($invoices, 'lost');
 
-        // Taken over: posted, its answer lost. It may be on the platform: not sent again by the scheduler.
+        // Taken over: posted, its answer lost. It may be on the platform, which cannot be asked: not sent again by the scheduler.
         self::assertCount(1, $this->statusesPosted());
         $status = $invoice->getStatuses()[0];
         self::assertSame([false, true], [$status['sent'], $status['unknown'] ?? false]);
         self::assertStringContainsString('may have been taken', (string) $status['error']);
+        self::assertTrue($invoices->awaitsConfirmation($invoice, 0));
+        self::lostAgo($invoice, 60);
         self::assertSame(0, $invoices->sendPending());
         self::assertCount(1, $this->statusesPosted(), 'nothing sent twice');
+        self::assertSame([], $this->lookups());
 
         // A person found it was not there: sent again, once.
         self::assertTrue($invoices->confirmStatus($invoice, 0, false));
@@ -359,12 +420,115 @@ class SupplierInvoicesTest extends InMemoryOmnibill
         self::assertFalse($invoices->confirmStatus($invoice, 0, false), 'settled: nothing more to confirm');
 
         // The approval's answer lost too; the person sees it on the platform: marked sent, nothing posted.
-        $this->lostStatus = true;
+        $this->onStatus = 'lost';
         $invoices->book($invoice, '6061');
         self::assertCount(3, $this->statusesPosted());
         self::assertTrue($invoices->confirmStatus($invoice, 1, true));
         self::assertCount(3, $this->statusesPosted());
         self::assertSame([true, true], array_column($invoice->getStatuses(), 'sent'));
+    }
+
+    public function testAStatusWhoseAnswerWasLostIsFoundOnThePlatformByItsKeyAndNotSentAgain(): void
+    {
+        $this->requiresTrackingIds();
+        $invoices = $this->supplierInvoices($this->registry(), null, $this->messages());
+        $invoice = $this->received($invoices, 'lost');
+        $key = 'status:supplier-invoice-'.$invoice->getId().':0';
+
+        // The message went with its key (flowInfo.trackingId), kept with the status whose answer was lost.
+        self::assertSame($key, SupplierInvoices::trackingId($invoice, 0));
+        self::assertSame([$key], array_column($this->sent, 'trackingId'));
+        self::assertSame([false, true, $key], [$invoice->getStatuses()[0]['sent'], $invoice->getStatuses()[0]['unknown'], $invoice->getStatuses()[0]['tracking']]);
+        // The platform can be asked: not a person's to settle.
+        self::assertFalse($invoices->awaitsConfirmation($invoice, 0));
+        self::assertSame([], $invoices->awaitingConfirmation($invoice));
+        self::assertFalse($invoices->confirmStatus($invoice, 0, false), 'no answer asked of a person while the platform can be asked');
+        self::assertCount(1, $this->statusesPosted());
+
+        // The next pass asks first: found under its key, it is sent, with the platform's flow.
+        self::assertSame(0, $invoices->sendPending());
+        self::assertSame([$key], $this->lookups());
+        self::assertSame([true, false, $this->sent[0]['flowId']], [$invoice->getStatuses()[0]['sent'], $invoice->getStatuses()[0]['unknown'], $invoice->getStatuses()[0]['flow']]);
+        self::assertCount(1, $this->statusesPosted(), 'never sent twice');
+        self::assertSame(0, $invoices->sendPending());
+        self::assertSame([$key], $this->lookups(), 'settled: not asked again');
+    }
+
+    public function testAStatusThePlatformDoesNotHaveIsSentAgainOnceItsSearchHadTimeToShowIt(): void
+    {
+        $this->requiresTrackingIds();
+        $invoices = $this->supplierInvoices($this->registry(), null, $this->messages());
+        $invoice = $this->received($invoices, 'down');
+        $key = 'status:supplier-invoice-'.$invoice->getId().':0';
+        self::assertSame([], $this->sent, 'the platform took nothing');
+        self::assertTrue($invoice->getStatuses()[0]['unknown']);
+
+        // Asked at once: none, but a message just deposited may not show yet - nothing sent.
+        self::assertSame(0, $invoices->sendPending());
+        self::assertSame([$key], $this->lookups());
+        self::assertSame([false, true], [$invoice->getStatuses()[0]['sent'], $invoice->getStatuses()[0]['unknown']]);
+        self::assertCount(1, $this->statusesPosted());
+
+        // Still none once the search had time to show it: sent again, once, with the same key.
+        self::lostAgo($invoice, 11);
+        self::assertSame(1, $invoices->sendPending());
+        self::assertSame([$key, $key], $this->lookups());
+        self::assertCount(2, $this->statusesPosted());
+        self::assertSame([$key], array_column($this->sent, 'trackingId'));
+        self::assertSame([true, false], [$invoice->getStatuses()[0]['sent'], $invoice->getStatuses()[0]['unknown']]);
+        self::assertSame(0, $invoices->sendPending());
+        self::assertCount(2, $this->statusesPosted());
+    }
+
+    public function testASearchThePlatformCannotAnswerIsAskedAgainAndOneItRefusesIsLeftToAPerson(): void
+    {
+        $this->requiresTrackingIds();
+        $invoices = $this->supplierInvoices($this->registry(), null, $this->messages());
+        $invoice = $this->received($invoices, 'lost');
+        self::lostAgo($invoice, 60);
+
+        // The platform unreachable: nothing settled, nothing sent, asked again next time - not a person's yet.
+        $this->onSearch = 'down';
+        self::assertSame(0, $invoices->sendPending());
+        self::assertSame([false, true, false], [$invoice->getStatuses()[0]['sent'], $invoice->getStatuses()[0]['unknown'], $invoice->getStatuses()[0]['inconclusive']]);
+        self::assertFalse($invoices->awaitsConfirmation($invoice, 0));
+
+        // Its search refused: no answer to rely on, a person settles it; never sent again on its own.
+        $this->onSearch = 'refused';
+        self::assertSame(0, $invoices->sendPending());
+        self::assertTrue($invoice->getStatuses()[0]['inconclusive']);
+        self::assertStringContainsString('trackingId', (string) $invoice->getStatuses()[0]['error']);
+        self::assertSame([0], $invoices->awaitingConfirmation($invoice));
+        $this->onSearch = null;
+        $searches = \count($this->lookups());
+        self::assertSame(0, $invoices->sendPending());
+        self::assertCount($searches, $this->lookups(), 'left to the person: not asked again');
+        self::assertCount(1, $this->statusesPosted());
+
+        // The person sees it on the platform: marked sent, nothing posted.
+        self::assertTrue($invoices->confirmStatus($invoice, 0, true));
+        self::assertSame([true, false, false], [$invoice->getStatuses()[0]['sent'], $invoice->getStatuses()[0]['unknown'], $invoice->getStatuses()[0]['inconclusive']]);
+        self::assertCount(1, $this->statusesPosted());
+    }
+
+    public function testAStatusSentWithoutAKeyIsLeftToAPerson(): void
+    {
+        $invoices = $this->supplierInvoices($this->registry(), null, $this->messages());
+        $invoice = $this->received($invoices, null);
+        // Sent before the key existed (omnibill 1.2, or a status of then), its answer lost: no key kept.
+        $invoice->statusUnknown($invoice->declare('approved'), '[afnor] HTTP 503 to a write that may have been taken');
+        self::lostAgo($invoice, 60, 1);
+
+        // The platform could find a flow by its key, but this one has none: never sent again on its own, a person settles it.
+        self::assertSame(0, $invoices->sendPending());
+        self::assertSame([], $this->lookups(), 'nothing to ask the platform by');
+        self::assertSame([1], $invoices->awaitingConfirmation($invoice));
+        self::assertCount(1, $this->statusesPosted());
+        self::assertTrue($invoices->confirmStatus($invoice, 1, false), 'absent: sent again now');
+        self::assertCount(2, $this->statusesPosted());
+        // With omnibill 1.3 each message goes with its key; with 1.2, without.
+        $key = property_exists(SetStatus::class, 'trackingId') ? 'status:supplier-invoice-'.$invoice->getId().':' : null;
+        self::assertSame(null === $key ? [null, null] : [$key.'0', $key.'1'], array_column($this->sent, 'trackingId'));
     }
 
     public function testThePlatformUnreachableKeepsTheCursorAndSaysSo(): void

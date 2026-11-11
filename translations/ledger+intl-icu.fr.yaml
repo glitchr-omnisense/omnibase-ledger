@@ -497,6 +497,7 @@ invoice:
   status_sent: "transmis"
   status_waiting: "en attente"
   status_unknown: "issue inconnue : à vérifier sur la plateforme"
+  status_looking_up: "issue inconnue : recherché sur la plateforme par sa clé au prochain passage"
   status_taken: "Reçu par la plateforme"
   status_resend: "Absent : renvoyer"
   identifiers: "SIREN {siren}"

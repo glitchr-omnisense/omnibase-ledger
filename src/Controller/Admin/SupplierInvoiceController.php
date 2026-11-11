@@ -125,7 +125,7 @@ class SupplierInvoiceController extends AbstractLedgerPageController
     #[Route('/{id}', name: 'ledger_admin_invoice', requirements: ['id' => '\d+'], methods: ['GET'])]
     public function show(int $id): Response
     {
-        $this->available();
+        $invoices = $this->available();
         $invoice = $this->load(SupplierInvoice::class, $id);
         $supplierAccount = $invoice->getParty()?->getAccountNumber() ?? '401'.InvoiceProposer::accountSuffix($invoice->getSupplierName() ?? '');
 
@@ -136,6 +136,8 @@ class SupplierInvoiceController extends AbstractLedgerPageController
             'credit_note' => $this->proposer?->isCreditNote($invoice) ?? false,
             'chart' => array_values(array_filter($this->accounts?->chart($invoice->getBook()) ?? [], static fn ($a) => $a->isUnder('6') || $a->isUnder('2'))),
             'suppliers' => $this->parties?->ofKind($invoice->getBook(), PartyKind::SUPPLIER) ?? [],
+            // The statuses whose outcome only a person can settle; the others are looked up by the next pass.
+            'awaiting' => $invoices->awaitingConfirmation($invoice),
         ]);
     }
 
@@ -206,8 +208,9 @@ class SupplierInvoiceController extends AbstractLedgerPageController
     }
 
     /**
-     * A status sent whose outcome is unknown, settled by a person who looked on the platform:
-     * « taken » (it is there) marks it sent; otherwise it is sent again now.
+     * A status sent whose outcome is unknown and that the platform cannot settle, settled by a
+     * person who looked on the platform: « taken » (it is there) marks it sent; otherwise it is
+     * sent again now. One the next pass looks up by its key is not a person's to settle.
      */
     #[Route('/{id}/status/{index}', name: 'ledger_admin_invoice_status', requirements: ['id' => '\d+', 'index' => '\d+'], methods: ['POST'])]
     public function confirmStatus(Request $request, int $id, int $index): Response
@@ -216,6 +219,13 @@ class SupplierInvoiceController extends AbstractLedgerPageController
         $invoice = $this->load(SupplierInvoice::class, $id, LedgerVoter::MANAGE);
         $this->assertPostToken($request, 'ledger_invoice_'.$invoice->getId());
         $taken = $request->request->getBoolean('taken');
+        if (!$invoices->awaitsConfirmation($invoice, $index)) {
+            $this->addFlash('error', ($invoice->getStatuses()[$index]['unknown'] ?? false)
+                ? 'Ce statut est recherché sur la plateforme par sa clé à chaque passage : rien à confirmer.'
+                : 'Ce statut n\'attend pas de vérification.');
+
+            return $this->redirectToRoute('ledger_admin_invoice', ['id' => $invoice->getId()]);
+        }
         $invoices->confirmStatus($invoice, $index, $taken)
             ? $this->addFlash('success', $taken ? 'Statut marqué comme reçu par la plateforme.' : 'Statut transmis de nouveau.')
             : $this->addFlash('error', (string) ($invoice->getStatuses()[$index]['error'] ?? 'Ce statut n\'attend pas de vérification.'));

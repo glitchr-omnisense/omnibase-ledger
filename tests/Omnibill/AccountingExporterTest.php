@@ -9,6 +9,8 @@ use Base\Ledger\Exception\LedgerException;
 use Base\Ledger\Model\EntryDraft;
 use Base\Ledger\Omnibill\Entity\AccountingExportItem;
 use Base\Ledger\Omnibill\Enum\ExportState;
+use Omnibill\ContactLookupInterface;
+use Omnibill\Odoo\OdooGatewayFactory;
 use Omnibill\Pennylane\PennylaneGatewayFactory;
 use Omnibill\Registry;
 use Symfony\Component\HttpClient\MockHttpClient;
@@ -20,8 +22,9 @@ use Symfony\Component\HttpClient\Response\MockResponse;
  * MockHttpClient that records each request): contacts first, then entries;
  * a second export a no-op, a refusal kept per record, a run that stopped
  * resumed without sending anything twice, a record whose answer was lost
- * looked up before it is sent again, a record changed since it went
- * flagged and never sent again on its own.
+ * looked up before it is sent again (an entry, a contact; on odoo too, whose
+ * ref is not unique), a record changed since it went flagged and never sent
+ * again on its own.
  */
 class AccountingExporterTest extends InMemoryOmnibill
 {
@@ -35,8 +38,12 @@ class AccountingExporterTest extends InMemoryOmnibill
      */
     private array $onEntry = [];
     private int $entriesPosted = 0;
-    /** What befalls the next POST /suppliers: "down" (a 503). */
+    /** What befalls the next POST /suppliers: "down" (a 503, nothing taken), "lost" (taken, then a 503). */
     private ?string $onSupplier = null;
+    /** @var list<array<string, mixed>> the suppliers the software has */
+    private array $suppliers = [];
+    /** @var list<string> the external_reference each supplier search asked for */
+    private array $searched = [];
     /** @var list<array<string, mixed>> the entries the software has, as it lists them */
     private array $software = [];
     private Party $edf;
@@ -61,7 +68,8 @@ class AccountingExporterTest extends InMemoryOmnibill
         $this->posting()->post((new EntryDraft($this->book, 'OD', new \DateTimeImmutable('2026-11-02'), 'Novembre', 'misc:nov'))->line('6061', 100, 0)->line('512', 0, 100));
     }
 
-    private function registry(): Registry
+    /** @param bool $contactLookup false: a gateway that cannot find a contact again (omnibill 1.2's; its find_contact action taken out) */
+    private function registry(bool $contactLookup = true): Registry
     {
         $http = new MockHttpClient(function (string $method, string $url, array $options): MockResponse {
             $path = substr((string) parse_url($url, \PHP_URL_PATH), \strlen('/api/external/v2'));
@@ -96,19 +104,79 @@ class AccountingExporterTest extends InMemoryOmnibill
 
                 return 'lost' === $fate ? new MockResponse('', ['http_code' => 503]) : $json($entry, 201);
             }
+            if ('GET' === $method && '/suppliers' === $path) {
+                $where = array_column(json_decode((string) ($query['filter'] ?? '[]'), true), 'value', 'field');
+                $this->searched[] = $where['external_reference'] ?? '';
+
+                return $json(['items' => array_values(array_filter($this->suppliers, static fn (array $s) => $s['external_reference'] === ($where['external_reference'] ?? null))), 'has_more' => false, 'next_cursor' => null]);
+            }
             if ('POST' === $method && '/suppliers' === $path && 'down' === $this->onSupplier) {
                 $this->onSupplier = null;
 
                 return new MockResponse('', ['http_code' => 503]);
             }
             if (\in_array($method, ['POST', 'PUT'], true) && str_starts_with($path, '/suppliers')) {
-                return $json(['id' => 'PUT' === $method ? (int) substr($path, \strlen('/suppliers/')) : 3301, 'name' => $body['name'] ?? '', 'external_reference' => $body['external_reference'] ?? null, 'ledger_account' => ['id' => 4011, 'number' => $body['ledger_account']['number'] ?? null]], 'POST' === $method ? 201 : 200);
+                $supplier = ['id' => 'PUT' === $method ? (int) substr($path, \strlen('/suppliers/')) : 3301 + \count($this->suppliers), 'name' => $body['name'] ?? '', 'external_reference' => $body['external_reference'] ?? null, 'ledger_account' => ['id' => 4011, 'number' => $body['ledger_account']['number'] ?? null]];
+                if ('POST' === $method) {
+                    $this->suppliers[] = $supplier;
+                }
+                if ('lost' === $this->onSupplier) {
+                    $this->onSupplier = null;
+
+                    return new MockResponse('', ['http_code' => 503]);
+                }
+
+                return $json($supplier, 'POST' === $method ? 201 : 200);
             }
 
             return $json(['error' => 'unexpected '.$method.' '.$path], 404);
         });
 
-        return new Registry([new PennylaneGatewayFactory($http)], ['accountant' => ['factory' => 'pennylane', 'options' => ['token' => 'pl-company-token']]]);
+        return new Registry([new PennylaneGatewayFactory($http)], ['accountant' => ['factory' => 'pennylane', 'options' => ['token' => 'pl-company-token'] + ($contactLookup ? [] : ['omnibill.action.find_contact' => null])]]);
+    }
+
+    /**
+     * Odoo 19's JSON-2 API: the supplier's creation not taken, a 502; a customer some other
+     * hand gave the supplier's key as its ref (ref is a plain Char, not unique); what else is
+     * asked (the journals) refused.
+     *
+     * @param list<array<string, mixed>> $partners res.partner as the database has it
+     */
+    private function odoo(array &$partners): Registry
+    {
+        $creates = 0;
+        $http = new MockHttpClient(function (string $method, string $url, array $options) use (&$partners, &$creates): MockResponse {
+            $path = (string) parse_url($url, \PHP_URL_PATH);
+            $body = json_decode((string) ($options['body'] ?? '{}'), true);
+            $this->calls[] = [$method, $path, $body];
+            $json = static fn (mixed $data, int $status = 200) => new MockResponse((string) json_encode($data), ['http_code' => $status, 'response_headers' => ['content-type' => 'application/json']]);
+            if ('/json/2/res.partner/create' === $path) {
+                $values = $body['vals_list'][0];
+                if (isset($values['supplier_rank']) && 1 === ++$creates) {
+                    return new MockResponse('', ['http_code' => 502]);
+                }
+                $partners[] = ['id' => 90 + \count($partners), 'name' => $values['name'], 'ref' => $values['ref'] ?? false, 'customer_rank' => $values['customer_rank'] ?? 0, 'supplier_rank' => $values['supplier_rank'] ?? 0, 'country_id' => false];
+
+                return $json([end($partners)['id']]);
+            }
+            if ('/json/2/res.partner/search_read' === $path) {
+                $ref = $body['domain'][0][2] ?? null;
+
+                return $json(array_values(array_filter($partners, static fn (array $p) => $p['ref'] === $ref)));
+            }
+
+            return $json(['name' => 'odoo.exceptions.AccessError', 'message' => 'not in this test'], 403);
+        });
+
+        return new Registry([new OdooGatewayFactory($http)], ['books' => ['factory' => 'odoo', 'options' => ['url' => 'https://books.odoo.example', 'api_key' => 'odoo-api-key']]]);
+    }
+
+    /** A contact is found again by its key since omnibill 1.3 (ContactLookupInterface). */
+    private function requiresContactLookup(): void
+    {
+        if (!interface_exists(ContactLookupInterface::class)) {
+            self::markTestSkipped('omnibill 1.3 finds a contact again (ContactLookupInterface): before, every lost contact is a person\'s to check.');
+        }
     }
 
     /** @return list<array{string, string, mixed}> the writes: what reached the software */
@@ -220,9 +288,49 @@ class AccountingExporterTest extends InMemoryOmnibill
         self::assertCount(2, $this->software);
     }
 
-    public function testAContactWhoseAnswerWasLostWaitsForAPerson(): void
+    public function testAContactWhoseAnswerWasLostIsFoundByItsKeyAndNotCreatedAgain(): void
     {
+        $this->requiresContactLookup();
         $exporter = $this->exporter($this->registry(), 'accountant');
+        $period = [new \DateTimeImmutable('2026-10-01'), new \DateTimeImmutable('2026-10-31')];
+        $created = fn () => \count(array_filter($this->writes(), static fn (array $c) => 'POST' === $c[0] && '/suppliers' === $c[1]));
+
+        // EDF created by Pennylane, its answer lost: unknown, the run stops before the entries.
+        $this->onSupplier = 'lost';
+        $run = $exporter->export($this->book, ...$period);
+        $edf = $this->item(AccountingExportItem::CONTACT, 'siren:552081317');
+        self::assertSame([ExportState::FAILED, ExportState::UNKNOWN, 1], [$run->getState(), $edf?->getState(), $created()]);
+        self::assertStringContainsString('may have been taken', (string) $edf?->getError());
+
+        // The next run asks Pennylane for it by its external reference first: found, kept with its id, not created twice.
+        $resumed = $exporter->export($this->book, ...$period);
+        self::assertSame(['siren:552081317'], $this->searched);
+        self::assertSame([ExportState::SENT, '3301'], [$edf->getState(), $edf->getReference()]);
+        self::assertSame([ExportState::DONE, 1], [$resumed->getState(), $created()]);
+        self::assertCount(1, $this->suppliers);
+        self::assertSame(ExportState::SENT, $this->item(AccountingExportItem::ENTRY, 'supplier-invoice:7')?->getState(), 'the entries went once their supplier was found');
+    }
+
+    public function testAContactTheSoftwareDoesNotHaveIsCreatedOnceItWasAsked(): void
+    {
+        $this->requiresContactLookup();
+        $exporter = $this->exporter($this->registry(), 'accountant');
+        $period = [new \DateTimeImmutable('2026-10-01'), new \DateTimeImmutable('2026-10-31')];
+
+        // A 503 to EDF's creation, which Pennylane did not take: unknown all the same, looked up, then created once.
+        $this->onSupplier = 'down';
+        $exporter->export($this->book, ...$period);
+        $edf = $this->item(AccountingExportItem::CONTACT, 'siren:552081317');
+        self::assertSame([ExportState::UNKNOWN, []], [$edf?->getState(), $this->suppliers]);
+        $exporter->export($this->book, ...$period);
+        self::assertSame(['siren:552081317'], $this->searched);
+        self::assertSame([ExportState::SENT, '3301'], [$edf->getState(), $edf->getReference()]);
+        self::assertCount(1, $this->suppliers, 'created again only after Pennylane said it had none');
+    }
+
+    public function testAContactWhoseAnswerWasLostOnAGatewayThatCannotLookItUpWaitsForAPerson(): void
+    {
+        $exporter = $this->exporter($this->registry(false), 'accountant');
         $period = [new \DateTimeImmutable('2026-10-01'), new \DateTimeImmutable('2026-10-31')];
         $suppliers = fn () => \count(array_filter($this->writes(), static fn (array $c) => 'POST' === $c[0] && '/suppliers' === $c[1]));
         $this->onSupplier = 'down';
@@ -231,13 +339,47 @@ class AccountingExporterTest extends InMemoryOmnibill
         $edf = $this->item(AccountingExportItem::CONTACT, 'siren:552081317');
         self::assertSame([ExportState::FAILED, ExportState::UNKNOWN], [$run->getState(), $edf?->getState()]);
 
-        // omnibill cannot look a contact up: the next run leaves it alone, never creating the supplier twice on its own.
+        // The gateway cannot look a contact up: the next run leaves it alone, never creating the supplier twice on its own.
         $exporter->export($this->book, ...$period);
-        self::assertSame([ExportState::UNKNOWN, 1], [$edf->getState(), $suppliers()]);
+        self::assertSame([ExportState::UNKNOWN, 1, []], [$edf->getState(), $suppliers(), $this->searched]);
 
         // A person checked Pennylane and found none: sent again by hand.
         $exporter->retry($edf, 'gestion');
         self::assertSame([ExportState::SENT, '3301', 2], [$edf->getState(), $edf->getReference(), $suppliers()]);
+    }
+
+    public function testAContactOfTheOtherKindUnderTheSameKeyIsNeitherTakenForItNorCreatedBesideItOnItsOwn(): void
+    {
+        $this->requiresContactLookup();
+        // In Odoo, a customer someone gave EDF's key as its ref.
+        $partners = [['id' => 41, 'name' => 'EDF Collectivités', 'ref' => 'siren:552081317', 'customer_rank' => 1, 'supplier_rank' => 0, 'country_id' => false]];
+        $exporter = $this->exporter($this->odoo($partners), 'books');
+        $period = [new \DateTimeImmutable('2026-10-01'), new \DateTimeImmutable('2026-10-31')];
+        $creates = fn () => array_map(static fn (array $c) => $c[2]['vals_list'][0]['name'], array_values(array_filter($this->calls, static fn (array $c) => '/json/2/res.partner/create' === $c[1])));
+
+        // EDF's creation answered 502: unknown, the run stops.
+        $run = $exporter->export($this->book, ...$period);
+        $edf = $this->item(AccountingExportItem::CONTACT, 'siren:552081317');
+        self::assertSame([ExportState::FAILED, ExportState::UNKNOWN, ['EDF']], [$run->getState(), $edf?->getState(), $creates()]);
+
+        // The next run asks Odoo by ref: the customer answers, not a supplier - neither taken for EDF nor a second EDF created.
+        $exporter->export($this->book, ...$period);
+        self::assertSame(ExportState::UNKNOWN, $edf->getState());
+        self::assertNull($edf->getReference());
+        self::assertStringContainsString('not this supplier (its id 41)', (string) $edf->getError());
+        self::assertSame(['EDF', 'Jean Dupont'], $creates(), 'the tenant created; EDF not again');
+        $lookups = array_values(array_filter($this->calls, static fn (array $c) => '/json/2/res.partner/search_read' === $c[1]));
+        self::assertSame([['ref', '=', 'siren:552081317']], $lookups[0][2]['domain']);
+
+        // A third run leaves it to the person still.
+        $exporter->export($this->book, ...$period);
+        self::assertSame([ExportState::UNKNOWN, ['EDF', 'Jean Dupont']], [$edf->getState(), $creates()]);
+
+        // The person checked Odoo: EDF is not there. Sent again by hand: created, beside the customer.
+        $exporter->retry($edf, 'gestion');
+        self::assertSame([ExportState::SENT, (string) end($partners)['id']], [$edf->getState(), $edf->getReference()]);
+        self::assertSame(['EDF', 'Jean Dupont', 'EDF'], $creates());
+        self::assertSame([1, 0], [$partners[0]['customer_rank'], $partners[0]['supplier_rank']], 'the customer untouched');
     }
 
     public function testARecordChangedSinceItWentIsFlaggedNotSentAgain(): void

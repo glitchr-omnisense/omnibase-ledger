@@ -113,8 +113,19 @@ reached - the status waits in the invoice (`statuses`, its error said on the pag
 `ledger:invoices:receive` sends it again.
 
 A status whose answer was lost after it left (omnibill's `OutcomeUnknownException`: a timeout, a
-server error) may be on the platform already, and a platform cannot be asked for a status
-message it took: it is marked « issue inconnue » on the invoice's page and never sent again on its
-own. A person looks on the platform, then answers « Reçu par la plateforme » (marked sent) or
-« Absent : renvoyer » (sent again now): `SupplierInvoices::confirmStatus()`,
-`ledger_admin_invoice_status`.
+server error) may be on the platform already: it is marked « issue inconnue » and never sent again
+blindly. With omnibill 1.3 each status's message goes with a key of its own,
+`status:supplier-invoice-<invoice id>:<index>` (`SupplierInvoices::trackingId()`, sent as
+`SetStatus::$trackingId`, the flow's `flowInfo.trackingId` on afnor; the invoice's id qualified so
+that another sender's statuses on the same account never answer for it). The next pass
+(`ledger:invoices:receive`, `sendPending()`) first asks the platform for it (`findFlow()`, where the
+gateway supports `FindFlow`): found, it is marked sent with the platform's flow; absent once the
+search had time to show it (`SupplierInvoices::SEARCH_DELAY`, 10 minutes after the answer was
+lost), it is sent again, once, with the same key; the platform unreachable, it is asked again next
+time. The page says « recherché sur la plateforme par sa clé ».
+
+A person settles it only where the platform cannot: a gateway without `FindFlow` (chorus-pro; the
+e-mail gateway records its statuses itself), a search the platform refused (its reason kept), or a
+status sent without a key (omnibill 1.2, or before the upgrade). The page then offers « Reçu par la
+plateforme » (marked sent) or « Absent : renvoyer » (sent again now):
+`SupplierInvoices::awaitsConfirmation()`, `confirmStatus()`, `ledger_admin_invoice_status`.

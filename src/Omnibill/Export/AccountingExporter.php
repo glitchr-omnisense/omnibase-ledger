@@ -13,6 +13,7 @@ use Base\Ledger\Omnibill\Repository\AccountingExportItemRepository;
 use Base\Ledger\Omnibill\Repository\AccountingExportRepository;
 use Base\Ledger\Repository\EntryRepository;
 use Doctrine\ORM\EntityManagerInterface;
+use Omnibill\ContactLookupInterface;
 use Omnibill\ContactsInterface;
 use Omnibill\EntryLookupInterface;
 use Omnibill\Exception\InvalidConfigException;
@@ -26,8 +27,11 @@ use Omnibill\Exception\UsageLimitReachedException;
 use Omnibill\GatewayInterface;
 use Omnibill\JournalEntriesInterface;
 use Omnibill\Model\Capabilities;
+use Omnibill\Model\Contact;
+use Omnibill\Model\ContactKind;
 use Omnibill\Model\JournalEntry;
 use Omnibill\Registry;
+use Omnibill\Request\Accounting\FindContact;
 use Omnibill\Request\Accounting\FindEntry;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Lock\LockFactory;
@@ -53,11 +57,14 @@ use Symfony\Component\Lock\LockFactory;
  * OutcomeUnknownException: a timeout, a server error) may be in the
  * software: it is UNKNOWN, and the run stops as for an unreachable one. It
  * is never sent again as it is: the next run, or a person's retry, asks the
- * software for the entry by its key first (EntryLookupInterface::findEntry(),
- * where the gateway supports it: odoo, pennylane) and sends it only when the
- * software has none. A contact, or an entry on a gateway that cannot be
- * asked, waits for a person, who checks in the software and sends it again
- * (retry()).
+ * software for it by its key first - an entry through
+ * EntryLookupInterface::findEntry() (omnibill 1.2), a contact through
+ * ContactLookupInterface::findContact() (omnibill 1.3), where the gateway
+ * supports it (odoo, pennylane) - and sends it only when the software has
+ * none. A record on a gateway that cannot be asked, a contact without a key,
+ * or one the software answers with a contact of the other kind under the
+ * same key (Odoo's ref is not unique), waits for a person, who checks in
+ * the software and sends it again (retry()).
  */
 class AccountingExporter
 {
@@ -141,7 +148,7 @@ class AccountingExporter
     /**
      * A record a person looked at, sent again: a refused or failed one as
      * at first; one whose outcome was unknown once the person checked the
-     * software (an entry still looked up first where the gateway can); a
+     * software (an entry or a contact still looked up first where the gateway can); a
      * changed contact updated in the software (its reference kept). A
      * changed entry is never sent again - the software has the first one:
      * correct it there, then acknowledge() it.
@@ -254,8 +261,7 @@ class AccountingExporter
 
             return;
         }
-        if (ExportState::UNKNOWN === $item->getState() && !$retry) {
-            // No lookup of a contact in omnibill: a person checks the software first.
+        if (ExportState::UNKNOWN === $item->getState() && !$this->contactAbsent($run, $contacts, $contact, $item, $retry)) {
             return;
         }
         try {
@@ -343,6 +349,71 @@ class AccountingExporter
         $this->entityManager->flush();
 
         return false;
+    }
+
+    /**
+     * A contact whose outcome was unknown, asked of the software by its key
+     * before it is created again: whether it is to be saved. Found, it is
+     * SENT with the software's reference (counted as already there); asked
+     * in vain, it is to be created. A gateway that cannot be asked (omnibill
+     * before 1.3, a gateway without FindContact), a contact without a key,
+     * an answer to rely on none, or a contact of the other kind under its key
+     * leave it to a person: saved only on their retry.
+     *
+     * @throws UnreachableException|InvalidKeyException|UsageLimitReachedException the software could not be asked: it stays UNKNOWN
+     */
+    private function contactAbsent(AccountingExport $run, ContactsInterface $contacts, Contact $contact, AccountingExportItem $item, bool $retry): bool
+    {
+        // Asked of the interface, not of the version: on omnibill 1.2 neither the interface nor the request exists.
+        if (null === $contact->key || !$contacts instanceof ContactLookupInterface
+            || ($contacts instanceof GatewayInterface && !(class_exists(FindContact::class) && $contacts->supports(FindContact::class)))) {
+            return $retry;
+        }
+        try {
+            $found = $contacts->findContact($contact);
+        } catch (UnreachableException|InvalidKeyException|UsageLimitReachedException $e) {
+            throw $e;
+        } catch (ProviderException|InvalidConfigException|NotSupportedException $e) {
+            // Asked, and no answer to rely on: a person checks.
+            $item->unknown($run, $e->getMessage(), $item->getFingerprint());
+            $this->entityManager->flush();
+
+            return $retry;
+        }
+        if (null === $found) {
+            return true;
+        }
+        if (!self::sameContact($contact, $found) || null === $found->reference) {
+            // Not the one sent: never taken for it, never created beside it on its own.
+            $item->unknown($run, sprintf('The software has a contact under the key "%s" that is not this %s (its id %s): check it, then send again.', $contact->key, $contact->kind->value, $found->reference ?? '-'), $item->getFingerprint());
+            $this->entityManager->flush();
+
+            return $retry;
+        }
+        // The software took it: what it took is what was sent then, the fingerprint kept (a change since is flagged next time).
+        $item->sent($run, $found->reference, null, $item->getFingerprint());
+        $run->count('skipped');
+        $this->entityManager->flush();
+
+        return false;
+    }
+
+    /**
+     * Whether the contact the software found under the key is the one asked
+     * for: the same key and kind. Odoo's ref is not unique: its findContact()
+     * answers the first partner of the contact's kind, else the first of
+     * any, under the kind asked - the partner's own supplier_rank or
+     * customer_rank, in the data it answered, tells which it is. Pennylane
+     * searches the kind's own list.
+     */
+    private static function sameContact(Contact $asked, Contact $found): bool
+    {
+        if ($found->kind !== $asked->kind || (null !== $found->key && $found->key !== $asked->key)) {
+            return false;
+        }
+        $rank = ContactKind::SUPPLIER === $asked->kind ? 'supplier_rank' : 'customer_rank';
+
+        return !\array_key_exists($rank, $found->data) || (is_numeric($found->data[$rank]) && $found->data[$rank] > 0);
     }
 
     /** A record the software has: left alone when the book still says the same, flagged when it does not. */

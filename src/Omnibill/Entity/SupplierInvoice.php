@@ -146,7 +146,7 @@ class SupplierInvoice
     #[ORM\Column(type: 'datetime_immutable', nullable: true)]
     private ?\DateTimeImmutable $paidAt = null;
 
-    /** @var list<array{status: string, at: string, sent: bool, error?: ?string, flow?: ?string, reason?: ?string, amount?: ?string, amounts?: array<int, string>, unknown?: bool}> the lifecycle statuses declared, oldest first: sent to the gateway, waiting to be, or sent with their outcome unknown (a person checks); a paid one with its amount at each VAT rate (basis points => decimal string) */
+    /** @var list<array{status: string, at: string, sent: bool, error?: ?string, flow?: ?string, reason?: ?string, amount?: ?string, amounts?: array<int, string>, unknown?: bool, tracking?: ?string, lost?: string, inconclusive?: bool}> the lifecycle statuses declared, oldest first: sent to the gateway, waiting to be, or sent with their outcome unknown (looked up on the platform by its tracking key, else a person checks); a paid one with its amount at each VAT rate (basis points => decimal string) */
     #[ORM\Column(type: 'json')]
     private array $statuses = [];
 
@@ -305,7 +305,7 @@ class SupplierInvoice
         return $this;
     }
 
-    /** @return list<array{status: string, at: string, sent: bool, error?: ?string, flow?: ?string, reason?: ?string, amount?: ?string, amounts?: array<int, string>, unknown?: bool}> */
+    /** @return list<array{status: string, at: string, sent: bool, error?: ?string, flow?: ?string, reason?: ?string, amount?: ?string, amounts?: array<int, string>, unknown?: bool, tracking?: ?string, lost?: string, inconclusive?: bool}> */
     public function getStatuses(): array { return $this->statuses; }
 
     /**
@@ -322,23 +322,36 @@ class SupplierInvoice
 
     public function statusSent(int $index, ?string $flow): self
     {
-        $this->statuses[$index] = ['sent' => true, 'flow' => $flow, 'error' => null, 'unknown' => false] + $this->statuses[$index];
+        $this->statuses[$index] = ['sent' => true, 'flow' => $flow, 'error' => null, 'unknown' => false, 'inconclusive' => false] + $this->statuses[$index];
 
         return $this;
     }
 
-    /** Sent, and the gateway's answer lost: it may be on the platform, a person checks before it goes again. */
-    public function statusUnknown(int $index, string $error): self
+    /**
+     * Sent, and the gateway's answer lost: it may be on the platform. Looked
+     * up by $trackingId, the key its message went with (omnibill 1.3), before
+     * it goes again; without one, a person checks. When it was lost is kept:
+     * a message just deposited may take a moment to show in the search.
+     */
+    public function statusUnknown(int $index, string $error, ?string $trackingId = null): self
     {
-        $this->statuses[$index] = ['unknown' => true, 'error' => mb_substr($error, 0, 255)] + $this->statuses[$index];
+        $this->statuses[$index] = ['unknown' => true, 'error' => mb_substr($error, 0, 255), 'tracking' => $trackingId, 'lost' => (new \DateTimeImmutable())->format(\DATE_ATOM), 'inconclusive' => false] + $this->statuses[$index];
 
         return $this;
     }
 
-    /** A person found it was not on the platform: to be sent again. */
+    /** Looked up on the platform, and its answer none to rely on (its search refused): a person checks, $why kept. */
+    public function statusInconclusive(int $index, string $why): self
+    {
+        $this->statuses[$index] = ['inconclusive' => true, 'error' => mb_substr($why, 0, 255)] + $this->statuses[$index];
+
+        return $this;
+    }
+
+    /** Not on the platform, a person or its search says: to be sent again (its outcome no longer unknown). */
     public function statusRetried(int $index): self
     {
-        $this->statuses[$index] = ['unknown' => false] + $this->statuses[$index];
+        $this->statuses[$index] = ['unknown' => false, 'inconclusive' => false] + $this->statuses[$index];
 
         return $this;
     }
@@ -350,7 +363,7 @@ class SupplierInvoice
         return $this;
     }
 
-    /** @return array<int, array{status: string, at: string, sent: bool, error?: ?string, flow?: ?string, reason?: ?string, amount?: ?string, amounts?: array<int, string>, unknown?: bool}> by index, oldest first */
+    /** @return array<int, array{status: string, at: string, sent: bool, error?: ?string, flow?: ?string, reason?: ?string, amount?: ?string, amounts?: array<int, string>, unknown?: bool, tracking?: ?string, lost?: string, inconclusive?: bool}> by index, oldest first */
     public function unsentStatuses(): array
     {
         return array_filter($this->statuses, static fn (array $s) => !$s['sent']);

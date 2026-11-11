@@ -497,6 +497,7 @@ invoice:
   status_sent: "sent"
   status_waiting: "waiting"
   status_unknown: "outcome unknown: check on the platform"
+  status_looking_up: "outcome unknown: looked up on the platform by its key at the next pass"
   status_taken: "On the platform"
   status_resend: "Not there: send again"
   identifiers: "SIREN {siren}"

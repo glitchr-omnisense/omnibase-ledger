@@ -10,6 +10,18 @@
   Needs omnibase/admin from that step, which every site on omnisense/omnibase 5.x has. tests/Controller/Admin/RecordHooksTest.
 
 ### Changed
+- On omnisense/omnibill 1.3 (its answer to the ledger, 2026-11-12), still running on 1.2 (each step asked of
+  the interface or the request, never of a version):
+  - A declared status goes with a key of its own, `status:supplier-invoice-<id>:<index>`
+    (`SupplierInvoices::trackingId()`, `SetStatus::$trackingId` through `execute()`). One whose answer was
+    lost is asked of the platform by it at the next pass before anything is sent (`findFlow()`): found, it is
+    sent; absent after `SEARCH_DELAY` (10 minutes), sent again once; unreachable, asked again. « Reçu par la
+    plateforme » / « Absent : renvoyer » stay for a gateway without `FindFlow`, a search refused, a status
+    sent without a key (`awaitsConfirmation()`); the page shows the others as looked up.
+  - A contact whose creation's answer was lost is looked up by its key (`ContactLookupInterface::findContact()`,
+    where the gateway supports `FindContact`) before it is created again: found, its reference kept; absent,
+    created. A match of the other kind under the same key (Odoo's `ref` is not unique) waits for a person.
+  - Statuses keep `tracking`, `lost` and `inconclusive` in the same JSON column: no schema change.
 - On omnisense/omnibill 1.2 (what the ledger asked of it, 2026-11-11):
   - A record sent to the accountant's software whose answer was lost after it left (omnibill's
     `OutcomeUnknownException`) is `ExportState::UNKNOWN`, never sent again as it is: an entry is

@@ -82,17 +82,27 @@ class TemplatesTest extends InMemoryOmnibill
         self::assertStringContainsString('name="reason"', $html);
         self::assertStringContainsString('token-ledger_invoice_'.$invoice->getId(), $html);
 
-        // A status whose answer was lost: a person says whether the platform has it.
+        // A status whose answer was lost and the platform cannot settle: a person says whether the platform has it.
         $invoice->statusUnknown($invoice->declare('taken_over'), '[afnor] HTTP 503 to a write that may have been taken');
         $html = $this->block('@Ledger/admin/invoices/show.html.twig', [
             'book' => $this->book, 'invoice' => $invoice, 'credit_note' => false,
             'proposal' => $this->proposer()->lines($invoice, '6061', $edf->getAccountNumber()),
-            'chart' => [$this->accounts['6061']], 'suppliers' => [$edf],
+            'chart' => [$this->accounts['6061']], 'suppliers' => [$edf], 'awaiting' => [0],
         ]);
         self::assertStringContainsString('issue inconnue', $html);
         self::assertStringContainsString('/ledger_admin_invoice_status?id='.$invoice->getId().'&amp;index=0', $html);
         self::assertStringContainsString('Reçu par la plateforme', $html);
         self::assertStringContainsString('Absent : renvoyer', $html);
+
+        // One the next pass looks up by its key (the controller's "awaiting" leaves it out): no answer asked of a person.
+        $html = $this->block('@Ledger/admin/invoices/show.html.twig', [
+            'book' => $this->book, 'invoice' => $invoice, 'credit_note' => false,
+            'proposal' => $this->proposer()->lines($invoice, '6061', $edf->getAccountNumber()),
+            'chart' => [$this->accounts['6061']], 'suppliers' => [$edf], 'awaiting' => [],
+        ]);
+        self::assertStringContainsString('recherché sur la plateforme par sa clé', $html);
+        self::assertStringNotContainsString('ledger_admin_invoice_status', $html);
+        self::assertStringNotContainsString('Reçu par la plateforme', $html);
     }
 
     public function testTheAccountingExportPages(): void

@@ -66,9 +66,15 @@ reference and the fingerprint of what went:
   record is **never sent again as it is**: the next export, or « Vérifier et renvoyer », first asks
   the software for the entry by its key (omnibill's `EntryLookupInterface::findEntry()`: Odoo by
   the key it keeps, Pennylane by the date, journal, label and piece) - found, it is sent with the
-  software's reference (counted « déjà présents »); absent, it is posted. A contact, or an entry on a
-  gateway that cannot be asked, waits for a person, who checks the software and sends it again
-  with « Vérifier et renvoyer »;
+  software's reference (counted « déjà présents »); absent, it is posted. A contact likewise, by
+  its key (omnibill 1.3's `ContactLookupInterface::findContact()`: Pennylane by `external_reference`
+  on the kind's own list, Odoo by `ref`): found, its reference is kept and it is not created
+  twice; absent, it is created. Odoo's `ref` is not unique: a partner of the other kind under the
+  same key (a customer where a supplier is looked for, told by its `supplier_rank` /
+  `customer_rank`) is neither taken for it nor created beside it on its own - it waits for a
+  person. A record on a gateway that cannot be asked (omnibill 1.2, a gateway without
+  `FindEntry` / `FindContact`), a contact without a key, or a lookup refused, waits for a person, who
+  checks the software and sends it again with « Vérifier et renvoyer » (still looked up first);
 - **changed** since it went (its fingerprint no longer the book's): flagged, never sent again on
   its own. A contact is updated in the software by « Mettre à jour » (its reference kept); an
   entry is corrected in the software by hand, then marked « Corrigé à la main »

@@ -19,9 +19,10 @@ enum ExportState: string
     /**
      * Sent, and the software's answer lost (a timeout, a server error after
      * the request left: omnibill's OutcomeUnknownException): it may have it.
-     * Never sent again as it is: an entry is looked up first by its key where
-     * the gateway can (findEntry()); otherwise a person checks in the software
-     * and sends it again by hand.
+     * Never sent again as it is: it is looked up first by its key where the
+     * gateway can (an entry: findEntry(); a contact: findContact(), omnibill
+     * 1.3); otherwise a person checks in the software and sends it again by
+     * hand.
      */
     case UNKNOWN = 'unknown';
     /** Changed in the book since it was sent: flagged, never sent again on its own. */

@@ -19,14 +19,22 @@ use Base\Ledger\Repository\BookRepository;
 use Base\Ledger\Service\Parties;
 use Base\Ledger\Service\Posting;
 use Doctrine\ORM\EntityManagerInterface;
+use Omnibill\Exception\InvalidConfigException;
+use Omnibill\Exception\InvalidKeyException;
+use Omnibill\Exception\NotSupportedException;
 use Omnibill\Exception\OmnibillException;
 use Omnibill\Exception\OutcomeUnknownException;
+use Omnibill\Exception\ProviderException;
+use Omnibill\Exception\UnreachableException;
+use Omnibill\Exception\UsageLimitReachedException;
+use Omnibill\FlowLookupInterface;
 use Omnibill\Model\Direction;
 use Omnibill\Model\Flow;
 use Omnibill\Model\FlowKind;
 use Omnibill\Model\LifecycleStatus;
 use Omnibill\Model\StatusChange;
 use Omnibill\Registry;
+use Omnibill\Request\FindFlow;
 use Omnibill\Request\Receive;
 use Omnibill\Request\SetStatus;
 use Omnibill\Writer\LifecycleMessageWriterInterface;
@@ -53,14 +61,24 @@ use Symfony\Component\Lock\LockFactory;
  * Writer\LifecycleMessageWriterInterface, registered as a service, gives
  * the StatusChange its file; neither omnibill nor the ledger writes one. A
  * status the gateway could not take stays in the invoice, unsent, and
- * sendPending() tries it again; one whose answer was lost after it left
- * (omnibill's OutcomeUnknownException) may be on the platform already, and
- * no platform can be asked for it: it waits for a person (confirmStatus()),
- * never sent again on its own. An invoice dropped by a person has no
- * gateway and its statuses are the book's alone.
+ * sendPending() tries it again. One whose answer was lost after it left
+ * (omnibill's OutcomeUnknownException) may be on the platform already: it
+ * is never sent again blindly. Since omnibill 1.3 each status goes with a
+ * key of its own (SetStatus::$trackingId, trackingId()), and the next pass
+ * asks the platform for it (findFlow(), where the gateway supports FindFlow)
+ * before anything is sent again: found, it is sent; absent once the search
+ * had time to show it (SEARCH_DELAY), it is sent again, once. A gateway
+ * that cannot look it up (chorus-pro; email records its statuses itself), a
+ * search whose answer is none to rely on, or a status sent before the key
+ * existed, leave it to a person (awaitsConfirmation(), confirmStatus()):
+ * « Reçu par la plateforme », or « Absent : renvoyer ». An invoice dropped
+ * by a person has no gateway and its statuses are the book's alone.
  */
 class SupplierInvoices
 {
+    /** How long a status's message just deposited may take to show in the platform's search: before, "none" proves nothing. */
+    public const SEARCH_DELAY = 'PT10M';
+
     public function __construct(
         private readonly EntityManagerInterface $entityManager,
         private readonly SupplierInvoiceRepository $invoices,
@@ -292,13 +310,15 @@ class SupplierInvoices
     }
 
     /**
-     * A status whose outcome was unknown, settled by a person who checked
-     * on the platform: there ($taken), it is marked sent; not there, it is
-     * sent again now. Whether it went.
+     * A status whose outcome was unknown and that the platform cannot settle
+     * (awaitsConfirmation()), settled by a person who checked on the
+     * platform: there ($taken), it is marked sent; not there, it is sent
+     * again now. Whether it went; false too for a status the next pass looks
+     * up by its key, a person's answer not needed.
      */
     public function confirmStatus(SupplierInvoice $invoice, int $index, bool $taken): bool
     {
-        if (!($invoice->getStatuses()[$index]['unknown'] ?? false)) {
+        if (!$this->awaitsConfirmation($invoice, $index)) {
             return false;
         }
         if ($taken) {
@@ -315,13 +335,43 @@ class SupplierInvoices
     }
 
     /**
-     * Sends again the statuses a gateway could not take: how many went. A
-     * status whose outcome is unknown waits for a person (confirmStatus()).
+     * Whether a status whose outcome is unknown waits for a person: sent
+     * without a key (before omnibill 1.3), on a gateway that cannot find a
+     * flow again (no FindFlow), or looked up and answered nothing to rely
+     * on. Otherwise the next pass looks it up (sendPending()).
+     */
+    public function awaitsConfirmation(SupplierInvoice $invoice, int $index): bool
+    {
+        $status = $invoice->getStatuses()[$index] ?? null;
+        if (null === $status || $status['sent'] || !($status['unknown'] ?? false)) {
+            return false;
+        }
+
+        return ($status['inconclusive'] ?? false) || null === ($status['tracking'] ?? null) || null === $this->lookup($invoice);
+    }
+
+    /** @return list<int> the indexes of the invoice's statuses waiting for a person (awaitsConfirmation()) */
+    public function awaitingConfirmation(SupplierInvoice $invoice): array
+    {
+        return array_values(array_filter(array_keys($invoice->getStatuses()), fn (int $index) => $this->awaitsConfirmation($invoice, $index)));
+    }
+
+    /**
+     * Sends again the statuses a gateway could not take: how many went.
+     * First, before anything is sent, a status whose outcome is unknown is
+     * asked of the platform by its key (findAgain()): there, it is sent;
+     * absent, it goes with the others. One the platform cannot settle waits
+     * for a person (confirmStatus()).
      */
     public function sendPending(): int
     {
         $sent = 0;
         foreach ($this->invoices->fromGateways() as $invoice) {
+            foreach ($invoice->unsentStatuses() as $index => $status) {
+                if ($status['unknown'] ?? false) {
+                    $this->findAgain($invoice, $index);
+                }
+            }
             foreach ($invoice->unsentStatuses() as $index => $status) {
                 if ($status['unknown'] ?? false) {
                     continue;
@@ -390,6 +440,78 @@ class SupplierInvoices
         $this->entityManager->flush();
     }
 
+    /**
+     * The key a status's message goes with (SetStatus::$trackingId), unique
+     * among the application's flows on the platform: « status:supplier-invoice-7:1 »,
+     * the invoice's id qualified as the ledger's entries' source is, so that
+     * another sender's statuses on the same account (omnibase/marketplace)
+     * never answer for it.
+     */
+    public static function trackingId(SupplierInvoice $invoice, int $index): ?string
+    {
+        return null === $invoice->getId() ? null : sprintf('status:supplier-invoice-%d:%d', $invoice->getId(), $index);
+    }
+
+    /**
+     * A status whose outcome is unknown, asked of the platform by its key:
+     * found, it is sent (the flow's reference kept); absent once
+     * SEARCH_DELAY has passed since its answer was lost, it is to be sent
+     * again (no longer unknown); absent sooner, or the platform not reached,
+     * it is asked again by the next pass. A search the platform refuses
+     * leaves it to a person.
+     */
+    private function findAgain(SupplierInvoice $invoice, int $index): void
+    {
+        $status = $invoice->getStatuses()[$index] ?? null;
+        if (null === $status || ($status['inconclusive'] ?? false) || null === ($tracking = $status['tracking'] ?? null) || null === ($gateway = $this->lookup($invoice))) {
+            return;
+        }
+        try {
+            $flow = $gateway->findFlow($tracking);
+        } catch (UnreachableException|InvalidKeyException|UsageLimitReachedException) {
+            // The platform could not be asked (both are ProviderExceptions, caught first): asked again by the next pass.
+            return;
+        } catch (ProviderException|InvalidConfigException|NotSupportedException $e) {
+            // Asked, and no answer to rely on: a person checks.
+            $invoice->statusInconclusive($index, $e->getMessage());
+
+            return;
+        } catch (OmnibillException) {
+            return;
+        }
+        if (null !== $flow) {
+            $invoice->statusSent($index, $flow->reference);
+
+            return;
+        }
+        $lost = new \DateTimeImmutable($status['lost'] ?? $status['at']);
+        if ($lost > (new \DateTimeImmutable())->sub(new \DateInterval(self::SEARCH_DELAY))) {
+            return;
+        }
+        $invoice->statusRetried($index);
+    }
+
+    /** The invoice's gateway when it can find a status's message again by its key (FindFlow); null when it cannot. */
+    private function lookup(SupplierInvoice $invoice): ?FlowLookupInterface
+    {
+        if (null === $this->registry || null === $invoice->getGateway()) {
+            return null;
+        }
+        try {
+            $gateway = $this->registry->get($invoice->getGateway());
+        } catch (OmnibillException) {
+            return null;
+        }
+
+        return $gateway instanceof FlowLookupInterface && $gateway->supports(FindFlow::class) ? $gateway : null;
+    }
+
+    /** Whether omnibill gives a status's message a key of its own (SetStatus::$trackingId, since 1.3): before, it goes without, and a person checks. */
+    private static function tracks(): bool
+    {
+        return property_exists(SetStatus::class, 'trackingId');
+    }
+
     /** Sends one declared status; whether it went. */
     private function send(SupplierInvoice $invoice, int $index): bool
     {
@@ -397,6 +519,7 @@ class SupplierInvoices
         if (null === $declared || $declared['sent'] || null === $this->registry) {
             return false;
         }
+        $tracking = self::tracks() ? self::trackingId($invoice, $index) : null;
         try {
             $gateway = $this->registry->get((string) $invoice->getGateway());
             if (!$gateway->supports(SetStatus::class)) {
@@ -409,12 +532,15 @@ class SupplierInvoices
                 LifecycleStatus::from($declared['status']), $invoice->getNumber(), new \DateTimeImmutable($declared['at']), $declared['reason'] ?? null, $declared['amount'] ?? null,
                 amounts: $declared['amounts'] ?? [],
             );
-            $answer = $gateway->setStatus($this->messages?->write($change, $flow) ?? $change, $flow);
+            // Through execute(): GatewayInterface::setStatus() keeps its two arguments, the key is the request's (omnibill 1.3).
+            $request = new SetStatus($this->messages?->write($change, $flow) ?? $change, $flow, $tracking);
+            $gateway->execute($request);
+            $answer = $request->getFlow() ?? throw new ProviderException((string) $invoice->getGateway(), 'No flow answered.');
             $invoice->statusSent($index, $answer->reference);
 
             return true;
         } catch (OutcomeUnknownException $e) {
-            $invoice->statusUnknown($index, $e->getMessage());
+            $invoice->statusUnknown($index, $e->getMessage(), $tracking);
 
             return false;
         } catch (OmnibillException|\ValueError $e) {
