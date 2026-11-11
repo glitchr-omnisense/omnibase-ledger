@@ -23,7 +23,8 @@ class AccountingExportItemRepository extends ServiceEntityRepository
     }
 
     /**
-     * What waits for a person on this gateway: refused, failed, changed.
+     * What waits for a person on this gateway: refused, failed, sent with
+     * its outcome unknown, changed.
      *
      * @return list<AccountingExportItem>
      */
@@ -31,7 +32,7 @@ class AccountingExportItemRepository extends ServiceEntityRepository
     {
         $qb = $this->createQueryBuilder('i')
             ->andWhere('i.book = :book')->setParameter('book', $book)
-            ->andWhere('i.state IN (:states)')->setParameter('states', [ExportState::REFUSED->value, ExportState::FAILED->value, ExportState::CHANGED->value])
+            ->andWhere('i.state IN (:states)')->setParameter('states', [ExportState::REFUSED->value, ExportState::FAILED->value, ExportState::UNKNOWN->value, ExportState::CHANGED->value])
             ->orderBy('i.updatedAt', 'DESC')->setMaxResults($limit);
         if (null !== $gateway) {
             $qb->andWhere('i.gateway = :gateway')->setParameter('gateway', $gateway);

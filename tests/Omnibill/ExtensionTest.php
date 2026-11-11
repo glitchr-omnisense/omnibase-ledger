@@ -29,7 +29,7 @@ class ExtensionTest extends TestCase
         foreach (['Base\\Ledger\\Omnibill\\Invoice\\SupplierInvoices', 'Base\\Ledger\\Omnibill\\Invoice\\InvoiceProposer', 'Base\\Ledger\\Omnibill\\Invoice\\PaidInvoiceListener', 'Base\\Ledger\\Omnibill\\Export\\AccountingExporter', 'Base\\Ledger\\Omnibill\\Command\\InvoicesReceiveCommand', 'Base\\Ledger\\Omnibill\\Command\\AccountingExportCommand'] as $id) {
             self::assertTrue($container->hasDefinition($id), $id);
         }
-        foreach (['Base\\Ledger\\Omnibill\\Entity\\SupplierInvoice', 'Base\\Ledger\\Omnibill\\Invoice\\LifecycleMessageInterface'] as $id) {
+        foreach (['Base\\Ledger\\Omnibill\\Entity\\SupplierInvoice'] as $id) {
             self::assertTrue(!$container->hasDefinition($id) || $container->getDefinition($id)->hasTag('container.excluded'), $id);
         }
         self::assertNull($container->getParameter('ledger.invoices.gateway'));

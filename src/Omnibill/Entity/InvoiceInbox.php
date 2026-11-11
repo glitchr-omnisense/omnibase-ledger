@@ -6,7 +6,9 @@ use Base\Ledger\Omnibill\Repository\InvoiceInboxRepository;
 use Doctrine\ORM\Mapping as ORM;
 
 /**
- * Where receiving stopped on a gateway: the cursor its last receive() gave,
+ * Where receiving stopped on a gateway: the cursor its last receive() of the
+ * suppliers' invoices gave (a cursor belongs to the kinds of flows it was
+ * read with: the statuses are another reader's, with a cursor of its own),
  * so that the next one starts there and nothing is read twice.
  */
 #[ORM\Entity(repositoryClass: InvoiceInboxRepository::class)]

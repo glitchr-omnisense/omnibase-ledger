@@ -19,16 +19,26 @@ use Symfony\Component\HttpClient\Response\MockResponse;
  * omnibill's pennylane gateway (its Company API v2, answered by a
  * MockHttpClient that records each request): contacts first, then entries;
  * a second export a no-op, a refusal kept per record, a run that stopped
- * resumed without sending anything twice, a record changed since it went
+ * resumed without sending anything twice, a record whose answer was lost
+ * looked up before it is sent again, a record changed since it went
  * flagged and never sent again on its own.
  */
 class AccountingExporterTest extends InMemoryOmnibill
 {
     /** @var list<array{string, string, mixed}> method, path, JSON body */
     private array $calls = [];
-    /** Which POST /ledger_entries answers 503 (1 for the first), 0 for none. */
-    private int $downOnEntry = 0;
+    /**
+     * What befalls the nth POST /ledger_entries (1 for the first): "refused" the connection
+     * (it never left), "down" (a 503, nothing taken), "lost" (taken, then a 503).
+     *
+     * @var array<int, string>
+     */
+    private array $onEntry = [];
     private int $entriesPosted = 0;
+    /** What befalls the next POST /suppliers: "down" (a 503). */
+    private ?string $onSupplier = null;
+    /** @var list<array<string, mixed>> the entries the software has, as it lists them */
+    private array $software = [];
     private Party $edf;
     private Party $dupont;
 
@@ -68,12 +78,28 @@ class AccountingExporterTest extends InMemoryOmnibill
 
                 return $json(['items' => '6288' === $number ? [] : [['id' => crc32($number) % 100000, 'number' => $number, 'vat_rate' => null, 'enabled' => true]], 'has_more' => false, 'next_cursor' => null]);
             }
+            if ('GET' === $method && '/ledger_entries' === $path) {
+                $where = array_column(json_decode((string) ($query['filter'] ?? '[]'), true), 'value', 'field');
+
+                return $json(['items' => array_values(array_filter($this->software, static fn (array $e) => $e['date'] === $where['date'] && $e['journal_id'] === $where['journal_id'])), 'has_more' => false, 'next_cursor' => null]);
+            }
             if ('POST' === $method && '/ledger_entries' === $path) {
-                if (++$this->entriesPosted === $this->downOnEntry) {
+                $fate = $this->onEntry[++$this->entriesPosted] ?? null;
+                if ('refused' === $fate) {
+                    return new MockResponse('', ['error' => 'Failed to connect to app.pennylane.com port 443: Connection refused']);
+                }
+                if ('down' === $fate) {
                     return new MockResponse('', ['http_code' => 503]);
                 }
+                $entry = ['id' => 610000 + \count($this->calls), 'label' => $body['label'] ?? '', 'piece_number' => $body['piece_number'] ?? null, 'date' => $body['date'] ?? null, 'journal_id' => $body['journal_id'] ?? null, 'status' => 'complete', 'ledger_entry_lines' => []];
+                $this->software[] = $entry;
 
-                return $json(['id' => 610000 + \count($this->calls), 'label' => $body['label'] ?? '', 'piece_number' => $body['piece_number'] ?? null, 'date' => $body['date'] ?? null, 'journal_id' => $body['journal_id'] ?? null, 'status' => 'complete', 'ledger_entry_lines' => []], 201);
+                return 'lost' === $fate ? new MockResponse('', ['http_code' => 503]) : $json($entry, 201);
+            }
+            if ('POST' === $method && '/suppliers' === $path && 'down' === $this->onSupplier) {
+                $this->onSupplier = null;
+
+                return new MockResponse('', ['http_code' => 503]);
             }
             if (\in_array($method, ['POST', 'PUT'], true) && str_starts_with($path, '/suppliers')) {
                 return $json(['id' => 'PUT' === $method ? (int) substr($path, \strlen('/suppliers/')) : 3301, 'name' => $body['name'] ?? '', 'external_reference' => $body['external_reference'] ?? null, 'ledger_account' => ['id' => 4011, 'number' => $body['ledger_account']['number'] ?? null]], 'POST' === $method ? 201 : 200);
@@ -134,7 +160,8 @@ class AccountingExporterTest extends InMemoryOmnibill
     public function testARunThatStoppedIsResumedWithoutSendingTwice(): void
     {
         $exporter = $this->exporter($this->registry(), 'accountant');
-        $this->downOnEntry = 2;
+        // The second entry never leaves: the connection refused.
+        $this->onEntry = [2 => 'refused'];
         $run = $exporter->export($this->book, new \DateTimeImmutable('2026-10-01'), new \DateTimeImmutable('2026-10-31'));
 
         self::assertSame(ExportState::FAILED, $run->getState());
@@ -149,7 +176,68 @@ class AccountingExporterTest extends InMemoryOmnibill
         self::assertSame(ExportState::SENT, $this->item(AccountingExportItem::ENTRY, 'notice:AVIS-2026-10-U3')?->getState());
         self::assertCount(1, $this->runs);
         $posted = array_values(array_filter($this->writes(), static fn (array $c) => '/ledger_entries' === $c[1]));
-        self::assertSame(['Facture EDF octobre', 'Loyer Jean Dupont', 'Loyer Jean Dupont'], array_map(static fn (array $c) => $c[2]['label'], $posted), 'the purchase posted once; the notice again only because the software never took it (503)');
+        self::assertSame(['Facture EDF octobre', 'Loyer Jean Dupont', 'Loyer Jean Dupont'], array_map(static fn (array $c) => $c[2]['label'], $posted), 'the purchase posted once; the notice again only because it never reached the software');
+    }
+
+    public function testAnEntryWhoseAnswerWasLostIsLookedUpBeforeItIsSentAgain(): void
+    {
+        $exporter = $this->exporter($this->registry(), 'accountant');
+        $period = [new \DateTimeImmutable('2026-10-01'), new \DateTimeImmutable('2026-10-31')];
+        $posts = fn () => array_map(static fn (array $c) => $c[2]['label'], array_values(array_filter($this->writes(), static fn (array $c) => '/ledger_entries' === $c[1])));
+
+        // The purchase taken by Pennylane, its answer lost (a 503 after it was created): the outcome is unknown, the run stops.
+        $this->onEntry = [1 => 'lost'];
+        $run = $exporter->export($this->book, ...$period);
+        $purchase = $this->item(AccountingExportItem::ENTRY, 'supplier-invoice:7');
+        self::assertSame([ExportState::FAILED, ExportState::UNKNOWN], [$run->getState(), $purchase?->getState()]);
+        self::assertStringContainsString('may have been taken', (string) $purchase?->getError());
+        self::assertCount(1, $this->software);
+
+        // Resumed: Pennylane is asked for it by its date, journal, label and piece, and has it - not posted again.
+        $this->calls = [];
+        $resumed = $exporter->export($this->book, ...$period);
+        self::assertSame(ExportState::DONE, $resumed->getState());
+        self::assertSame([ExportState::SENT, (string) $this->software[0]['id']], [$purchase->getState(), $purchase->getReference()]);
+        self::assertSame(['Loyer Jean Dupont'], $posts(), 'the purchase found, the notice posted');
+        self::assertContains(['GET', '/ledger_entries', null], $this->calls);
+        self::assertCount(2, $this->software, 'one purchase in the software');
+
+    }
+
+    public function testAnEntryTheSoftwareDoesNotHaveIsSentAgainOnlyOnceItWasAsked(): void
+    {
+        $exporter = $this->exporter($this->registry(), 'accountant');
+        $period = [new \DateTimeImmutable('2026-10-01'), new \DateTimeImmutable('2026-10-31')];
+        $posts = fn () => array_map(static fn (array $c) => $c[2]['label'], array_values(array_filter($this->writes(), static fn (array $c) => '/ledger_entries' === $c[1])));
+
+        // A 503 to the purchase, which Pennylane did not take: unknown all the same, looked up, then posted once.
+        $this->onEntry = [1 => 'down'];
+        $exporter->export($this->book, ...$period);
+        self::assertSame(ExportState::UNKNOWN, $this->item(AccountingExportItem::ENTRY, 'supplier-invoice:7')?->getState());
+        $exporter->export($this->book, ...$period);
+        self::assertSame(ExportState::SENT, $this->item(AccountingExportItem::ENTRY, 'supplier-invoice:7')?->getState());
+        self::assertSame(['Facture EDF octobre', 'Facture EDF octobre', 'Loyer Jean Dupont'], $posts(), 'the purchase sent again only after Pennylane said it had none');
+        self::assertCount(2, $this->software);
+    }
+
+    public function testAContactWhoseAnswerWasLostWaitsForAPerson(): void
+    {
+        $exporter = $this->exporter($this->registry(), 'accountant');
+        $period = [new \DateTimeImmutable('2026-10-01'), new \DateTimeImmutable('2026-10-31')];
+        $suppliers = fn () => \count(array_filter($this->writes(), static fn (array $c) => 'POST' === $c[0] && '/suppliers' === $c[1]));
+        $this->onSupplier = 'down';
+
+        $run = $exporter->export($this->book, ...$period);
+        $edf = $this->item(AccountingExportItem::CONTACT, 'siren:552081317');
+        self::assertSame([ExportState::FAILED, ExportState::UNKNOWN], [$run->getState(), $edf?->getState()]);
+
+        // omnibill cannot look a contact up: the next run leaves it alone, never creating the supplier twice on its own.
+        $exporter->export($this->book, ...$period);
+        self::assertSame([ExportState::UNKNOWN, 1], [$edf->getState(), $suppliers()]);
+
+        // A person checked Pennylane and found none: sent again by hand.
+        $exporter->retry($edf, 'gestion');
+        self::assertSame([ExportState::SENT, '3301', 2], [$edf->getState(), $edf->getReference(), $suppliers()]);
     }
 
     public function testARecordChangedSinceItWentIsFlaggedNotSentAgain(): void

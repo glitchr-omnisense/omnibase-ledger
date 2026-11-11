@@ -40,8 +40,9 @@ ledger:
 - **Through the approved platform** (`omnibill/afnor`): `ledger:invoices:receive`, from a
   scheduler, or « Recevoir maintenant » on the back office's page. `SupplierInvoices::receive()`
   asks the gateway for what arrived since the cursor it kept (`ledger_invoice_inbox`), page after
-  page, and takes each invoice flow in; statuses about the application's own invoices are left
-  to the bundle that sent them (omnibase/marketplace).
+  page, asking for the invoices only (omnibill's `Receive` with `[FlowKind::INVOICE]`: the
+  platform's search filtered by `flowType`): the statuses about the application's own invoices
+  stay for the bundle that sent them (omnibase/marketplace), read with a cursor of its own.
 - **By hand**: a supplier who still mails its invoices (the `omnibill/email` route carries no
   incoming flow) - the file dropped on the page, or `ledger:invoices:receive --file=FA-77.pdf`.
 
@@ -96,10 +97,24 @@ When the reconciliation letters the entry's supplier line with a bank line
 
 Each step is declared to the supplier's platform through the gateway the invoice came by, as
 omnibill's `LifecycleStatus`: `taken_over` (204) on arrival, `approved` (205) once booked,
-`refused` (210) with its reason, `paid` (212) with its amount. A duplicate declares nothing; an
-invoice dropped by hand has no platform to tell.
+`refused` (210) with its reason, `paid` (212) with its amount and its amount at each VAT rate
+(`StatusChange::$amounts`, from the invoice's VAT breakdown: `[2000 => '120.00']`, the rate in
+basis points, base and VAT together). A duplicate declares nothing; an invoice dropped by hand
+has no platform to tell.
 
 An approved platform carries a status as a lifecycle message (CDAR), and neither omnibill nor the
-ledger writes one: an application registers a `Omnibill\Invoice\LifecycleMessageInterface`
-service that does. Without one - or when the platform does not answer - the status waits in the
-invoice (`statuses`, its error said on the page) and `ledger:invoices:receive` sends it again.
+ledger writes one: the application registers a service implementing omnibill's
+`Omnibill\Writer\LifecycleMessageWriterInterface` (`write(StatusChange $change, ?Flow $flow):
+StatusChange`, the change `withFile()`), written or validated by a person against the DGFiP's
+annexes; the flow it is handed is the invoice's (its `reference` the flow the invoice came by,
+`SupplierInvoiceRepository::findOneByFlow()`), the change carries the number, the status, the
+reason, the amount and the amounts by rate. Without one - or when the platform could not be
+reached - the status waits in the invoice (`statuses`, its error said on the page) and
+`ledger:invoices:receive` sends it again.
+
+A status whose answer was lost after it left (omnibill's `OutcomeUnknownException`: a timeout, a
+server error) may be on the platform already, and a platform cannot be asked for a status
+message it took: it is marked « issue inconnue » on the invoice's page and never sent again on its
+own. A person looks on the platform, then answers « Reçu par la plateforme » (marked sent) or
+« Absent : renvoyer » (sent again now): `SupplierInvoices::confirmStatus()`,
+`ledger_admin_invoice_status`.

@@ -146,7 +146,7 @@ class SupplierInvoice
     #[ORM\Column(type: 'datetime_immutable', nullable: true)]
     private ?\DateTimeImmutable $paidAt = null;
 
-    /** @var list<array{status: string, at: string, sent: bool, error?: ?string, flow?: ?string, reason?: ?string, amount?: ?string}> the lifecycle statuses declared, oldest first: sent to the gateway, or waiting to be */
+    /** @var list<array{status: string, at: string, sent: bool, error?: ?string, flow?: ?string, reason?: ?string, amount?: ?string, amounts?: array<int, string>, unknown?: bool}> the lifecycle statuses declared, oldest first: sent to the gateway, waiting to be, or sent with their outcome unknown (a person checks); a paid one with its amount at each VAT rate (basis points => decimal string) */
     #[ORM\Column(type: 'json')]
     private array $statuses = [];
 
@@ -305,20 +305,40 @@ class SupplierInvoice
         return $this;
     }
 
-    /** @return list<array{status: string, at: string, sent: bool, error?: ?string, flow?: ?string, reason?: ?string, amount?: ?string}> */
+    /** @return list<array{status: string, at: string, sent: bool, error?: ?string, flow?: ?string, reason?: ?string, amount?: ?string, amounts?: array<int, string>, unknown?: bool}> */
     public function getStatuses(): array { return $this->statuses; }
 
-    /** A lifecycle status to declare: kept, sent or not. Returns its index. */
-    public function declare(string $status, ?string $reason = null, ?string $amount = null): int
+    /**
+     * A lifecycle status to declare: kept, sent or not. Returns its index.
+     *
+     * @param array<int, string> $amounts for paid, the amount at each VAT rate (basis points => decimal string)
+     */
+    public function declare(string $status, ?string $reason = null, ?string $amount = null, array $amounts = []): int
     {
-        $this->statuses[] = ['status' => $status, 'at' => (new \DateTimeImmutable())->format(\DATE_ATOM), 'sent' => false, 'reason' => $reason, 'amount' => $amount];
+        $this->statuses[] = ['status' => $status, 'at' => (new \DateTimeImmutable())->format(\DATE_ATOM), 'sent' => false, 'reason' => $reason, 'amount' => $amount] + ([] === $amounts ? [] : ['amounts' => $amounts]);
 
         return \count($this->statuses) - 1;
     }
 
     public function statusSent(int $index, ?string $flow): self
     {
-        $this->statuses[$index] = ['sent' => true, 'flow' => $flow, 'error' => null] + $this->statuses[$index];
+        $this->statuses[$index] = ['sent' => true, 'flow' => $flow, 'error' => null, 'unknown' => false] + $this->statuses[$index];
+
+        return $this;
+    }
+
+    /** Sent, and the gateway's answer lost: it may be on the platform, a person checks before it goes again. */
+    public function statusUnknown(int $index, string $error): self
+    {
+        $this->statuses[$index] = ['unknown' => true, 'error' => mb_substr($error, 0, 255)] + $this->statuses[$index];
+
+        return $this;
+    }
+
+    /** A person found it was not on the platform: to be sent again. */
+    public function statusRetried(int $index): self
+    {
+        $this->statuses[$index] = ['unknown' => false] + $this->statuses[$index];
 
         return $this;
     }
@@ -330,7 +350,7 @@ class SupplierInvoice
         return $this;
     }
 
-    /** @return array<int, array{status: string, at: string, sent: bool, error?: ?string, flow?: ?string, reason?: ?string, amount?: ?string}> by index, oldest first */
+    /** @return array<int, array{status: string, at: string, sent: bool, error?: ?string, flow?: ?string, reason?: ?string, amount?: ?string, amounts?: array<int, string>, unknown?: bool}> by index, oldest first */
     public function unsentStatuses(): array
     {
         return array_filter($this->statuses, static fn (array $s) => !$s['sent']);

@@ -20,7 +20,7 @@ use Base\Ledger\Service\Parties;
 use Base\Ledger\Service\Posting;
 use Doctrine\ORM\EntityManagerInterface;
 use Omnibill\Exception\OmnibillException;
-use Omnibill\GatewayInterface;
+use Omnibill\Exception\OutcomeUnknownException;
 use Omnibill\Model\Direction;
 use Omnibill\Model\Flow;
 use Omnibill\Model\FlowKind;
@@ -29,6 +29,7 @@ use Omnibill\Model\StatusChange;
 use Omnibill\Registry;
 use Omnibill\Request\Receive;
 use Omnibill\Request\SetStatus;
+use Omnibill\Writer\LifecycleMessageWriterInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Lock\LockFactory;
 
@@ -46,10 +47,17 @@ use Symfony\Component\Lock\LockFactory;
  *
  * Each step is declared to the supplier's platform as a lifecycle status
  * through the gateway it came by: taken over on arrival, approved once
- * booked, refused with its reason, paid with its amount. A status the
- * gateway could not take stays in the invoice, unsent, and sendPending()
- * tries it again; an invoice dropped by a person has no gateway and its
- * statuses are the book's alone.
+ * booked, refused with its reason, paid with its amount and its amount at
+ * each VAT rate (StatusChange::$amounts). An approved platform carries a
+ * status as a lifecycle message (CDAR) the application writes: omnibill's
+ * Writer\LifecycleMessageWriterInterface, registered as a service, gives
+ * the StatusChange its file; neither omnibill nor the ledger writes one. A
+ * status the gateway could not take stays in the invoice, unsent, and
+ * sendPending() tries it again; one whose answer was lost after it left
+ * (omnibill's OutcomeUnknownException) may be on the platform already, and
+ * no platform can be asked for it: it waits for a person (confirmStatus()),
+ * never sent again on its own. An invoice dropped by a person has no
+ * gateway and its statuses are the book's alone.
  */
 class SupplierInvoices
 {
@@ -66,7 +74,7 @@ class SupplierInvoices
         private readonly ?Registry $registry = null,
         #[Autowire('%ledger.invoices.gateway%')] private readonly ?string $gateway = null,
         private readonly ?LockFactory $locks = null,
-        private readonly ?LifecycleMessageInterface $messages = null,
+        private readonly ?LifecycleMessageWriterInterface $messages = null,
     ) {
     }
 
@@ -91,8 +99,9 @@ class SupplierInvoices
     /**
      * What arrived on the gateway since the last time, page after page (at
      * most $pages): its invoices taken in, the cursor kept after each page.
-     * Statuses about the application's own invoices are left to whoever
-     * sent them (omnibase/marketplace).
+     * Only the invoices are asked for (Receive's kinds): the statuses about
+     * the application's own invoices stay for whoever sent them
+     * (omnibase/marketplace), read with a cursor of their own.
      *
      * @return array{gateway: ?string, received: int, duplicates: int, unreadable: int, skipped: int, error: ?string}
      */
@@ -124,7 +133,8 @@ class SupplierInvoices
                     throw new LedgerException(sprintf('The "%s" gateway receives no invoices.', $gateway));
                 }
                 for ($page = 0; $page < $pages; ++$page) {
-                    $box = $channel->receive($inbox->getCursor(), 25);
+                    $box = $channel->execute(new Receive($inbox->getCursor(), 25, [FlowKind::INVOICE]))->getInbox()
+                        ?? throw new LedgerException(sprintf('The "%s" gateway answered no inbox.', $gateway));
                     foreach ($box->items as $received) {
                         if (null === $received->invoice) {
                             continue;
@@ -273,24 +283,61 @@ class SupplierInvoices
         }
         $invoice->markPaid($on);
         $this->entityManager->flush();
-        $amount = null === $invoice->getTotalIncl() ? null : number_format(abs($invoice->getTotalIncl()) / 100, 2, '.', '');
-        $this->declare($invoice, LifecycleStatus::PAID, null, $amount);
+        $amount = null === $invoice->getTotalIncl() ? null : self::decimal($invoice->getTotalIncl());
+        $amounts = [];
+        foreach ($invoice->getVat() as $rate) {
+            $amounts[$rate['rate']] = ($amounts[$rate['rate']] ?? 0) + $rate['base'] + $rate['vat'];
+        }
+        $this->declare($invoice, LifecycleStatus::PAID, null, $amount, array_map(self::decimal(...), $amounts));
     }
 
     /**
-     * Sends again the statuses a gateway could not take: how many went.
+     * A status whose outcome was unknown, settled by a person who checked
+     * on the platform: there ($taken), it is marked sent; not there, it is
+     * sent again now. Whether it went.
+     */
+    public function confirmStatus(SupplierInvoice $invoice, int $index, bool $taken): bool
+    {
+        if (!($invoice->getStatuses()[$index]['unknown'] ?? false)) {
+            return false;
+        }
+        if ($taken) {
+            $invoice->statusSent($index, null);
+            $this->entityManager->flush();
+
+            return true;
+        }
+        $invoice->statusRetried($index);
+        $sent = $this->send($invoice, $index);
+        $this->entityManager->flush();
+
+        return $sent;
+    }
+
+    /**
+     * Sends again the statuses a gateway could not take: how many went. A
+     * status whose outcome is unknown waits for a person (confirmStatus()).
      */
     public function sendPending(): int
     {
         $sent = 0;
         foreach ($this->invoices->fromGateways() as $invoice) {
             foreach ($invoice->unsentStatuses() as $index => $status) {
+                if ($status['unknown'] ?? false) {
+                    continue;
+                }
                 $sent += (int) $this->send($invoice, $index);
             }
         }
         $this->entityManager->flush();
 
         return $sent;
+    }
+
+    /** A sum in minor units as a decimal string, its sign dropped: « 120.00 ». */
+    private static function decimal(int $minor): string
+    {
+        return number_format(abs($minor) / 100, 2, '.', '');
     }
 
     /** @return resource|null the invoice's file */
@@ -328,13 +375,17 @@ class SupplierInvoices
         }
     }
 
-    /** Records the status and sends it when the invoice came through a gateway. */
-    private function declare(SupplierInvoice $invoice, LifecycleStatus $status, ?string $reason = null, ?string $amount = null): void
+    /**
+     * Records the status and sends it when the invoice came through a gateway.
+     *
+     * @param array<int, string> $amounts by VAT rate in basis points, for PAID
+     */
+    private function declare(SupplierInvoice $invoice, LifecycleStatus $status, ?string $reason = null, ?string $amount = null, array $amounts = []): void
     {
         if (null === $invoice->getGateway() || null === $invoice->getFlowReference() || $invoice->hasDeclared($status->value)) {
             return;
         }
-        $index = $invoice->declare($status->value, $reason, $amount);
+        $index = $invoice->declare($status->value, $reason, $amount, $amounts);
         $this->send($invoice, $index);
         $this->entityManager->flush();
     }
@@ -353,16 +404,19 @@ class SupplierInvoices
 
                 return false;
             }
-            $status = LifecycleStatus::from($declared['status']);
-            $message = $this->messages?->write($invoice, $status->value, $declared['reason'] ?? null, $declared['amount'] ?? null);
-            $flow = $this->flow($gateway, $invoice);
-            $answer = $gateway->setStatus(new StatusChange(
-                $status, $invoice->getNumber(), new \DateTimeImmutable($declared['at']), $declared['reason'] ?? null, $declared['amount'] ?? null,
-                file: $message['content'] ?? null, filename: $message['filename'] ?? null,
-            ), $flow);
+            $flow = $this->flow($invoice);
+            $change = new StatusChange(
+                LifecycleStatus::from($declared['status']), $invoice->getNumber(), new \DateTimeImmutable($declared['at']), $declared['reason'] ?? null, $declared['amount'] ?? null,
+                amounts: $declared['amounts'] ?? [],
+            );
+            $answer = $gateway->setStatus($this->messages?->write($change, $flow) ?? $change, $flow);
             $invoice->statusSent($index, $answer->reference);
 
             return true;
+        } catch (OutcomeUnknownException $e) {
+            $invoice->statusUnknown($index, $e->getMessage());
+
+            return false;
         } catch (OmnibillException|\ValueError $e) {
             $invoice->statusFailed($index, $e->getMessage());
 
@@ -370,7 +424,8 @@ class SupplierInvoices
         }
     }
 
-    private function flow(GatewayInterface $gateway, SupplierInvoice $invoice): Flow
+    /** The invoice's flow, as the gateway gave it: what the status is about, and what the message writer finds the invoice by. */
+    private function flow(SupplierInvoice $invoice): Flow
     {
         return new Flow((string) $invoice->getFlowReference(), FlowKind::INVOICE, Direction::IN, invoiceNumber: $invoice->getNumber(), name: $invoice->getFilename());
     }

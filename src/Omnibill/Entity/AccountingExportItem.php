@@ -138,6 +138,12 @@ class AccountingExportItem
         return $this->stopped($run, ExportState::FAILED, $error, $fingerprint);
     }
 
+    /** Sent, its answer lost: the software may have it (ExportState::UNKNOWN). */
+    public function unknown(AccountingExport $run, string $error, string $fingerprint): self
+    {
+        return $this->stopped($run, ExportState::UNKNOWN, $error, $fingerprint);
+    }
+
     /** The book's record no longer matches what the software has: flagged, the reference kept. */
     public function changed(AccountingExport $run): self
     {

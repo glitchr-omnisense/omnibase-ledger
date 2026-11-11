@@ -14,16 +14,21 @@ use Base\Ledger\Omnibill\Repository\AccountingExportRepository;
 use Base\Ledger\Repository\EntryRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Omnibill\ContactsInterface;
+use Omnibill\EntryLookupInterface;
 use Omnibill\Exception\InvalidConfigException;
 use Omnibill\Exception\InvalidKeyException;
 use Omnibill\Exception\NotSupportedException;
 use Omnibill\Exception\OmnibillException;
+use Omnibill\Exception\OutcomeUnknownException;
 use Omnibill\Exception\ProviderException;
 use Omnibill\Exception\UnreachableException;
 use Omnibill\Exception\UsageLimitReachedException;
+use Omnibill\GatewayInterface;
 use Omnibill\JournalEntriesInterface;
 use Omnibill\Model\Capabilities;
+use Omnibill\Model\JournalEntry;
 use Omnibill\Registry;
+use Omnibill\Request\Accounting\FindEntry;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Lock\LockFactory;
 
@@ -43,6 +48,16 @@ use Symfony\Component\Lock\LockFactory;
  * Nothing is ever sent twice by a retry: omnibill's gateways run without
  * the HTTP client's retries, and a record is sent again only by a run, for
  * a record the software did not take.
+ *
+ * A record whose answer was lost after it left (omnibill's
+ * OutcomeUnknownException: a timeout, a server error) may be in the
+ * software: it is UNKNOWN, and the run stops as for an unreachable one. It
+ * is never sent again as it is: the next run, or a person's retry, asks the
+ * software for the entry by its key first (EntryLookupInterface::findEntry(),
+ * where the gateway supports it: odoo, pennylane) and sends it only when the
+ * software has none. A contact, or an entry on a gateway that cannot be
+ * asked, waits for a person, who checks in the software and sends it again
+ * (retry()).
  */
 class AccountingExporter
 {
@@ -125,9 +140,11 @@ class AccountingExporter
 
     /**
      * A record a person looked at, sent again: a refused or failed one as
-     * at first; a changed contact updated in the software (its reference
-     * kept). A changed entry is never sent again - the software has the
-     * first one: correct it there, then acknowledge() it.
+     * at first; one whose outcome was unknown once the person checked the
+     * software (an entry still looked up first where the gateway can); a
+     * changed contact updated in the software (its reference kept). A
+     * changed entry is never sent again - the software has the first one:
+     * correct it there, then acknowledge() it.
      *
      * @throws LedgerException
      */
@@ -237,10 +254,18 @@ class AccountingExporter
 
             return;
         }
+        if (ExportState::UNKNOWN === $item->getState() && !$retry) {
+            // No lookup of a contact in omnibill: a person checks the software first.
+            return;
+        }
         try {
             $saved = $contacts->saveContact(null === $item->getReference() ? $contact : $contact->with(reference: $item->getReference()));
             $item->sent($run, $saved->reference(), null, $fingerprint);
             $run->count('contact');
+        } catch (OutcomeUnknownException $e) {
+            $item->unknown($run, $e->getMessage(), $fingerprint);
+            $this->entityManager->flush();
+            throw $e;
         } catch (UnreachableException|InvalidKeyException|UsageLimitReachedException $e) {
             $item->failed($run, $e->getMessage(), $fingerprint);
             $this->entityManager->flush();
@@ -262,10 +287,17 @@ class AccountingExporter
 
             return;
         }
+        if (ExportState::UNKNOWN === $item->getState() && !$this->absent($run, $books, $record, $item, $retry)) {
+            return;
+        }
         try {
             $posted = $books->postEntry($record);
             $item->sent($run, $posted->reference(), $posted->number, $fingerprint);
             $run->count('entry');
+        } catch (OutcomeUnknownException $e) {
+            $item->unknown($run, $e->getMessage(), $fingerprint);
+            $this->entityManager->flush();
+            throw $e;
         } catch (UnreachableException|InvalidKeyException|UsageLimitReachedException $e) {
             $item->failed($run, $e->getMessage(), $fingerprint);
             $this->entityManager->flush();
@@ -275,6 +307,42 @@ class AccountingExporter
             $run->count('refused');
         }
         $this->entityManager->flush();
+    }
+
+    /**
+     * An entry whose outcome was unknown, asked of the software by its key
+     * before it is posted again: whether it is to be posted. Found, it is
+     * SENT with the software's reference (counted as already there); asked
+     * in vain, it is to be posted. A gateway that cannot be asked leaves it
+     * to a person: posted only on their retry.
+     *
+     * @throws UnreachableException|InvalidKeyException|UsageLimitReachedException the software could not be asked: it stays UNKNOWN
+     */
+    private function absent(AccountingExport $run, JournalEntriesInterface $books, JournalEntry $record, AccountingExportItem $item, bool $retry): bool
+    {
+        if (!$books instanceof EntryLookupInterface || ($books instanceof GatewayInterface && !$books->supports(FindEntry::class))) {
+            return $retry;
+        }
+        try {
+            $found = $books->findEntry($record);
+        } catch (UnreachableException|InvalidKeyException|UsageLimitReachedException $e) {
+            throw $e;
+        } catch (ProviderException|InvalidConfigException|NotSupportedException $e) {
+            // Asked, and no answer to rely on: a person checks.
+            $item->unknown($run, $e->getMessage(), $item->getFingerprint());
+            $this->entityManager->flush();
+
+            return $retry;
+        }
+        if (null === $found) {
+            return true;
+        }
+        // The software took it: what it took is what was sent then, the fingerprint kept (a change since is flagged next time).
+        $item->sent($run, $found->reference ?? $item->getRecordKey(), $found->number, $item->getFingerprint());
+        $run->count('skipped');
+        $this->entityManager->flush();
+
+        return false;
     }
 
     /** A record the software has: left alone when the book still says the same, flagged when it does not. */

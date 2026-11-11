@@ -109,9 +109,10 @@ service is private.
 - When `Omnibank\Registry` exists, `Bank\Connections` gets `$registry` as
   `service('Omnibank\Registry')->nullOnInvalid()`: `null` when Omnibank's bundle is not
   registered.
-- When `Omnibill\Registry` exists (omnisense/omnibill): `Omnibill/` but its entities, enums,
-  models and interfaces - the suppliers' invoices, the accounting export, their commands and
-  listener -, with
+- When `Omnibill\Registry` exists (omnisense/omnibill): `Omnibill/` but its entities, enums
+  and models - the suppliers' invoices, the accounting export, their commands and listener -,
+  `SupplierInvoices` taking the application's `Omnibill\Writer\LifecycleMessageWriterInterface`
+  when it registers one, with
   `Omnibill\Registry` as `$registry` (`nullOnInvalid()`); `LedgerExtension::prepend()` maps
   `Omnibill/Entity/` then (mapping `LedgerOmnibill`). Without it, `Omnibill/` is excluded and its
   admin controllers take their services as `null` and answer 404.

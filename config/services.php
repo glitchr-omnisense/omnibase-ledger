@@ -72,7 +72,6 @@ return function (ContainerConfigurator $configurator) {
                 $src.'/Omnibill/Enum/',
                 $src.'/Omnibill/Model/',
                 $src.'/Omnibill/Reading/InvoiceReadException.php',
-                $src.'/Omnibill/Invoice/LifecycleMessageInterface.php',
             ]);
         foreach (['Base\\Ledger\\Omnibill\\Invoice\\SupplierInvoices', 'Base\\Ledger\\Omnibill\\Export\\AccountingExporter'] as $service) {
             $services->get($service)->arg('$registry', service('Omnibill\\Registry')->nullOnInvalid());

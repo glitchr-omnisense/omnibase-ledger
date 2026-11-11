@@ -81,6 +81,18 @@ class TemplatesTest extends InMemoryOmnibill
         self::assertStringContainsString('value="6061"', $html);
         self::assertStringContainsString('name="reason"', $html);
         self::assertStringContainsString('token-ledger_invoice_'.$invoice->getId(), $html);
+
+        // A status whose answer was lost: a person says whether the platform has it.
+        $invoice->statusUnknown($invoice->declare('taken_over'), '[afnor] HTTP 503 to a write that may have been taken');
+        $html = $this->block('@Ledger/admin/invoices/show.html.twig', [
+            'book' => $this->book, 'invoice' => $invoice, 'credit_note' => false,
+            'proposal' => $this->proposer()->lines($invoice, '6061', $edf->getAccountNumber()),
+            'chart' => [$this->accounts['6061']], 'suppliers' => [$edf],
+        ]);
+        self::assertStringContainsString('issue inconnue', $html);
+        self::assertStringContainsString('/ledger_admin_invoice_status?id='.$invoice->getId().'&amp;index=0', $html);
+        self::assertStringContainsString('Reçu par la plateforme', $html);
+        self::assertStringContainsString('Absent : renvoyer', $html);
     }
 
     public function testTheAccountingExportPages(): void
@@ -99,8 +111,12 @@ class TemplatesTest extends InMemoryOmnibill
         self::assertStringContainsString('Renvoyer', $html);
         self::assertStringContainsString('Injoignable', $html);
 
-        $html = $this->block('@Ledger/admin/accounting/run.html.twig', ['book' => $this->book, 'run' => $run, 'items' => [$item]]);
+        $lost = $this->persisted(new AccountingExportItem($this->book, 'accountant', AccountingExportItem::ENTRY, 'notice:1', str_repeat('0', 64)));
+        $lost->unknown($run, '[pennylane] HTTP 503 to a write that may have been taken', str_repeat('0', 64));
+        $html = $this->block('@Ledger/admin/accounting/run.html.twig', ['book' => $this->book, 'run' => $run, 'items' => [$item, $lost]]);
         self::assertStringContainsString('HTTP 503', $html);
         self::assertStringContainsString('Refusé', $html);
+        self::assertStringContainsString('Issue inconnue', $html);
+        self::assertStringContainsString('Vérifier et renvoyer', $html);
     }
 }

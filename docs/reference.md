@@ -35,6 +35,7 @@ order: 45
 | `ledger_admin_invoice` | `/admin/ledger/invoices/{id}` | GET | view |
 | `ledger_admin_invoice_book` | `/admin/ledger/invoices/{id}/book` | POST | manage, token |
 | `ledger_admin_invoice_refuse` | `/admin/ledger/invoices/{id}/refuse` | POST | manage, token |
+| `ledger_admin_invoice_status` | `/admin/ledger/invoices/{id}/status/{index}` (`taken=1\|0`) | POST | manage, token |
 | `ledger_admin_invoice_file` | `/admin/ledger/invoices/{id}/file` | GET | view |
 | `ledger_admin_accounting` | `/admin/ledger/accounting` (`?book=`) | GET | view (omnibill) |
 | `ledger_admin_accounting_export` | `/admin/ledger/accounting/export` (`?book=`) | POST | manage, token |

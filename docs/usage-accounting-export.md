@@ -57,10 +57,18 @@ reference and the fingerprint of what went:
 - **refused** by the software (an account it has not, a journal unknown, a customer without the
   billing address Pennylane asks for): that record only; the run goes on. The next export tries it
   again; « Renvoyer » does it now;
-- **failed**: the software did not answer, a key was refused, a usage limit was reached
-  (Pennylane: 25 requests every 5 seconds). The run stops, `FAILED`, and the next export of the
-  same period **resumes it** - the same `AccountingExport`, its count of resumptions up by one:
-  what went is not sent again; what the software never took is;
+- **failed**: the software could not be reached (nothing left), a key was refused, a usage limit
+  was reached (Pennylane: 25 requests every 5 seconds). The run stops, `FAILED`, and the next
+  export of the same period **resumes it** - the same `AccountingExport`, its count of
+  resumptions up by one: what went is not sent again; what the software never took is;
+- **unknown**: sent, and the answer lost after it left (omnibill's `OutcomeUnknownException`: a
+  timeout, a server error) - the software may have it. The run stops as for a failure, and the
+  record is **never sent again as it is**: the next export, or « Vérifier et renvoyer », first asks
+  the software for the entry by its key (omnibill's `EntryLookupInterface::findEntry()`: Odoo by
+  the key it keeps, Pennylane by the date, journal, label and piece) - found, it is sent with the
+  software's reference (counted « déjà présents »); absent, it is posted. A contact, or an entry on a
+  gateway that cannot be asked, waits for a person, who checks the software and sends it again
+  with « Vérifier et renvoyer »;
 - **changed** since it went (its fingerprint no longer the book's): flagged, never sent again on
   its own. A contact is updated in the software by « Mettre à jour » (its reference kept); an
   entry is corrected in the software by hand, then marked « Corrigé à la main »

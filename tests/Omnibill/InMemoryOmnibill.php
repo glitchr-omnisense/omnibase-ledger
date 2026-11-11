@@ -14,7 +14,6 @@ use Base\Ledger\Omnibill\Entity\SupplierInvoice;
 use Base\Ledger\Omnibill\Enum\ExportState;
 use Base\Ledger\Omnibill\Export\AccountingExporter;
 use Base\Ledger\Omnibill\Invoice\InvoiceProposer;
-use Base\Ledger\Omnibill\Invoice\LifecycleMessageInterface;
 use Base\Ledger\Omnibill\Invoice\SupplierInvoices;
 use Base\Ledger\Omnibill\Reading\InvoiceReader;
 use Base\Ledger\Omnibill\Repository\AccountingExportItemRepository;
@@ -27,6 +26,7 @@ use Base\Ledger\Repository\PartyRepository;
 use Base\Ledger\Service\Parties;
 use Doctrine\ORM\EntityManagerInterface;
 use Omnibill\Registry;
+use Omnibill\Writer\LifecycleMessageWriterInterface;
 use Tests\Base\Ledger\InMemoryLedger;
 
 /**
@@ -163,7 +163,7 @@ abstract class InMemoryOmnibill extends InMemoryLedger
         return new InvoiceProposer($this->partyRepository(), $this->lineRepository(), $this->taxRepository(), $defaultAccount);
     }
 
-    protected function supplierInvoices(?Registry $registry = null, ?string $gateway = null, ?LifecycleMessageInterface $messages = null): SupplierInvoices
+    protected function supplierInvoices(?Registry $registry = null, ?string $gateway = null, ?LifecycleMessageWriterInterface $messages = null): SupplierInvoices
     {
         return new SupplierInvoices(
             $this->entityManager(), $this->supplierInvoiceRepository(), $this->inboxRepository(), $this->bookRepository(), $this->proposer(), new InvoiceReader(),

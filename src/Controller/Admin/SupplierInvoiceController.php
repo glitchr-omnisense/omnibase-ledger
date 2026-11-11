@@ -205,6 +205,24 @@ class SupplierInvoiceController extends AbstractLedgerPageController
         return $this->redirectToRoute('ledger_admin_invoice', ['id' => $invoice->getId()]);
     }
 
+    /**
+     * A status sent whose outcome is unknown, settled by a person who looked on the platform:
+     * « taken » (it is there) marks it sent; otherwise it is sent again now.
+     */
+    #[Route('/{id}/status/{index}', name: 'ledger_admin_invoice_status', requirements: ['id' => '\d+', 'index' => '\d+'], methods: ['POST'])]
+    public function confirmStatus(Request $request, int $id, int $index): Response
+    {
+        $invoices = $this->available();
+        $invoice = $this->load(SupplierInvoice::class, $id, LedgerVoter::MANAGE);
+        $this->assertPostToken($request, 'ledger_invoice_'.$invoice->getId());
+        $taken = $request->request->getBoolean('taken');
+        $invoices->confirmStatus($invoice, $index, $taken)
+            ? $this->addFlash('success', $taken ? 'Statut marqué comme reçu par la plateforme.' : 'Statut transmis de nouveau.')
+            : $this->addFlash('error', (string) ($invoice->getStatuses()[$index]['error'] ?? 'Ce statut n\'attend pas de vérification.'));
+
+        return $this->redirectToRoute('ledger_admin_invoice', ['id' => $invoice->getId()]);
+    }
+
     #[Route('/{id}/file', name: 'ledger_admin_invoice_file', requirements: ['id' => '\d+'], methods: ['GET'])]
     public function download(int $id): Response
     {

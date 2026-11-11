@@ -9,11 +9,13 @@ use Base\Ledger\Exception\LedgerException;
 use Base\Ledger\Model\EntryDraft;
 use Base\Ledger\Omnibill\Entity\SupplierInvoice;
 use Base\Ledger\Omnibill\Enum\SupplierInvoiceStatus;
-use Base\Ledger\Omnibill\Invoice\LifecycleMessageInterface;
 use Base\Ledger\Omnibill\Invoice\PaidInvoiceListener;
 use Base\Ledger\Reconciliation\Reconciler;
 use Omnibill\Afnor\AfnorGatewayFactory;
+use Omnibill\Model\Flow;
+use Omnibill\Model\StatusChange;
 use Omnibill\Registry;
+use Omnibill\Writer\LifecycleMessageWriterInterface;
 use Symfony\Component\EventDispatcher\EventDispatcher;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
@@ -23,7 +25,8 @@ use Symfony\Component\HttpClient\Response\MockResponse;
  * platform's flow service, XP Z12-013, answered by a MockHttpClient that
  * records each request - or dropped by hand: read, never proposed twice,
  * booked only by a person, refused with a reason, paid by a bank line,
- * each step declared back to the platform.
+ * each step declared back to the platform; only the invoices read from the
+ * inbox; a status whose answer was lost left to a person.
  */
 class SupplierInvoicesTest extends InMemoryOmnibill
 {
@@ -33,9 +36,11 @@ class SupplierInvoicesTest extends InMemoryOmnibill
     private array $calls = [];
     /** @var array<string, string> flow id => the invoice file the platform holds */
     private array $flows = [];
-    /** @var list<string> the flows the next search lists */
+    /** @var list<string> the flows the next search lists: a supplier's invoice, or "lc-..." a status about one of the application's own */
     private array $inbox = [];
     private bool $down = false;
+    /** The next status posted is taken by the platform, then answered 503. */
+    private bool $lostStatus = false;
 
     protected function setUp(): void
     {
@@ -59,7 +64,10 @@ class SupplierInvoicesTest extends InMemoryOmnibill
                 return new MockResponse('', ['http_code' => 503]);
             }
             if ('POST' === $method && str_ends_with($path, '/v1/flows/search')) {
-                $results = array_map(static fn (string $id) => ['flowId' => $id, 'submittedAt' => '2026-11-03T08:00:00Z', 'updatedAt' => '2026-11-03T08:00:01Z', 'name' => $id.'.xml', 'processingRule' => 'B2B', 'flowSyntax' => 'CII', 'flowProfile' => 'CIUS', 'flowType' => 'SupplierInvoice', 'flowDirection' => 'In'], $this->inbox);
+                $results = array_map(static fn (string $id) => ['flowId' => $id, 'submittedAt' => '2026-11-03T08:00:00Z', 'updatedAt' => '2026-11-03T08:00:01Z', 'name' => $id.'.xml', 'processingRule' => 'B2B', 'flowSyntax' => str_starts_with($id, 'lc-') ? 'CDAR' : 'CII', 'flowProfile' => 'CIUS', 'flowType' => str_starts_with($id, 'lc-') ? 'CustomerInvoiceLC' : 'SupplierInvoice', 'flowDirection' => 'In'], $this->inbox);
+                // The platform filters its search by flowType when asked.
+                $types = json_decode($body, true)['where']['flowType'] ?? null;
+                $results = array_values(array_filter($results, static fn (array $r) => null === $types || \in_array($r['flowType'], $types, true)));
                 $this->inbox = [];
 
                 return new MockResponse((string) json_encode(['limit' => 25, 'results' => $results, 'nextCursor' => [] === $results ? null : 'cursor-'.\count($this->calls)]));
@@ -68,6 +76,12 @@ class SupplierInvoicesTest extends InMemoryOmnibill
                 return new MockResponse($this->flows[$m[1]]);
             }
             if ('POST' === $method && str_ends_with($path, '/v1/flows')) {
+                if ($this->lostStatus) {
+                    $this->lostStatus = false;
+
+                    return new MockResponse('', ['http_code' => 503]);
+                }
+
                 return new MockResponse((string) json_encode(['flowId' => 'cdar-'.\count($this->calls), 'submittedAt' => '2026-11-03T09:00:00Z', 'flowSyntax' => 'CDAR']), ['http_code' => 202]);
             }
 
@@ -80,13 +94,19 @@ class SupplierInvoicesTest extends InMemoryOmnibill
         ]]]);
     }
 
-    /** The CDAR message an application writes: the platform carries a status as one. */
-    private function messages(): LifecycleMessageInterface
+    /**
+     * The application's lifecycle message writer (omnibill's extension point): the platform
+     * carries a status as a message. A stand-in here that echoes what it is given - the
+     * message's real content is the application's, written by a person.
+     */
+    private function messages(): LifecycleMessageWriterInterface
     {
-        return new class implements LifecycleMessageInterface {
-            public function write(SupplierInvoice $invoice, string $status, ?string $reason = null, ?string $amount = null): ?array
+        return new class implements LifecycleMessageWriterInterface {
+            public function write(StatusChange $change, ?Flow $flow = null): StatusChange
             {
-                return ['content' => '<CDAR status="'.$status.'" invoice="'.$invoice->getNumber().'" reason="'.$reason.'" amount="'.$amount.'"/>', 'filename' => 'CDV-'.$status.'-'.$invoice->getNumber().'.xml'];
+                $amounts = implode(',', array_map(static fn (int $rate, string $amount) => $rate.':'.$amount, array_keys($change->amounts), $change->amounts));
+
+                return $change->withFile('<CDAR status="'.$change->status->value.'" invoice="'.$change->invoiceNumber.'" reason="'.$change->reason.'" amount="'.$change->amount.'"'.('' === $amounts ? '' : ' amounts="'.$amounts.'"').' flow="'.$flow?->reference.'"/>', 'CDV-'.$change->status->value.'-'.$change->invoiceNumber.'.xml');
             }
         };
     }
@@ -137,7 +157,7 @@ class SupplierInvoicesTest extends InMemoryOmnibill
         self::assertFileExists($this->receiptsDirectory.'/'.substr((string) $invoice->getFile(), 6));
 
         // The platform hears it was taken over; the cursor is kept for the next time.
-        self::assertSame(['<CDAR status="taken_over" invoice="FA-2026-118" reason="" amount=""/>'], $this->statusesPosted());
+        self::assertSame(['<CDAR status="taken_over" invoice="FA-2026-118" reason="" amount="" flow="f-1"/>'], $this->statusesPosted());
         self::assertTrue($invoice->getStatuses()[0]['sent']);
         self::assertSame('cursor-2', $this->inboxes[0]->getCursor());
 
@@ -192,7 +212,7 @@ class SupplierInvoicesTest extends InMemoryOmnibill
         self::assertSame([['6061', 10000, 0, null, null, null], ['44566', 2000, 0, null, 'A20', 10000], [$edf->getAccountNumber(), 0, 12000, $edf, null, null]],
             array_map(static fn ($l) => [$l->getAccount()->getNumber(), $l->getDebit(), $l->getCredit(), $l->getParty(), $l->getTax()?->getCode(), $l->getTaxBase()], $entry->getLines()->toArray()));
         self::assertSame([SupplierInvoiceStatus::BOOKED, $entry, 'gestion'], [$invoice->getStatus(), $invoice->getEntry(), $invoice->getDecidedBy()]);
-        self::assertSame('<CDAR status="approved" invoice="FA-2026-118" reason="" amount=""/>', $this->statusesPosted()[1]);
+        self::assertSame('<CDAR status="approved" invoice="FA-2026-118" reason="" amount="" flow="f-1"/>', $this->statusesPosted()[1]);
 
         $this->expectException(LedgerException::class);
         $invoices->book($invoice, '6061');
@@ -233,7 +253,7 @@ class SupplierInvoicesTest extends InMemoryOmnibill
         $invoices = $this->supplierInvoices($this->registry(), null, $this->messages());
         $invoices->refuse($invoice, 'Commande annulée le 2026-10-28', 'gestion');
         self::assertSame([SupplierInvoiceStatus::REFUSED, 'Commande annulée le 2026-10-28'], [$invoice->getStatus(), $invoice->getReason()]);
-        self::assertSame(['<CDAR status="refused" invoice="FA-2026-118" reason="Commande annulée le 2026-10-28" amount=""/>'], $this->statusesPosted());
+        self::assertSame(['<CDAR status="refused" invoice="FA-2026-118" reason="Commande annulée le 2026-10-28" amount="" flow="f-1"/>'], $this->statusesPosted());
 
         self::assertSame(1, $invoices->sendPending(), 'the taken-over status, sent now');
         self::assertSame([true, true], array_column($invoice->getStatuses(), 'sent'));
@@ -261,7 +281,8 @@ class SupplierInvoicesTest extends InMemoryOmnibill
         $reconciler->apply($line, $suggestion);
 
         self::assertSame([SupplierInvoiceStatus::PAID, '2026-11-20'], [$invoice->getStatus(), $invoice->getPaidAt()?->format('Y-m-d')]);
-        self::assertSame('<CDAR status="paid" invoice="FA-2026-118" reason="" amount="120.00"/>', $this->statusesPosted()[2]);
+        self::assertSame('<CDAR status="paid" invoice="FA-2026-118" reason="" amount="120.00" amounts="2000:120.00" flow="f-1"/>', $this->statusesPosted()[2]);
+        self::assertSame([2000 => '120.00'], $invoice->getStatuses()[2]['amounts'], 'the amount paid at each VAT rate, kept with the status');
         // The earlier invoice, not settled, stays as it was: none of the supplier's other entries is touched.
         self::assertCount(1, array_filter($this->supplierInvoices, static fn (SupplierInvoice $i) => SupplierInvoiceStatus::PAID === $i->getStatus()));
         self::assertNotNull($edf);
@@ -294,6 +315,56 @@ class SupplierInvoicesTest extends InMemoryOmnibill
         self::assertNotNull($unreadable->getReason());
         $this->expectException(LedgerException::class);
         $invoices->book($unreadable, '615');
+    }
+
+    public function testOnlyTheInvoicesAreReadFromTheInbox(): void
+    {
+        $this->edfParty();
+        $this->flows['f-1'] = Invoices::cii();
+        // A status about one of the application's own invoices, in the same inbox: another reader's (omnibase/marketplace).
+        $this->flows['lc-1'] = '<status/>';
+        $this->inbox = ['lc-1', 'f-1'];
+
+        $report = $this->supplierInvoices($this->registry(), null, $this->messages())->receive();
+
+        self::assertSame([1, 0, null], [$report['received'], $report['skipped'], $report['error']]);
+        $search = array_values(array_filter($this->calls, static fn (array $c) => str_ends_with($c[1], '/v1/flows/search')))[0];
+        self::assertSame(['flowDirection' => ['In'], 'flowType' => ['SupplierInvoice', 'CustomerInvoice']], json_decode($search[2], true)['where']);
+        self::assertSame([], array_filter($this->calls, static fn (array $c) => str_contains($c[1], 'lc-1')), 'the status is never downloaded');
+        self::assertSame('cursor-2', $this->inboxes[0]->getCursor());
+    }
+
+    public function testAStatusWhoseAnswerWasLostWaitsForAPersonAndIsNeverSentAgainOnItsOwn(): void
+    {
+        $this->edfParty();
+        $invoices = $this->supplierInvoices($this->registry(), null, $this->messages());
+        $this->flows['f-1'] = Invoices::cii();
+        $this->inbox = ['f-1'];
+        $this->lostStatus = true;
+        $invoices->receive();
+        $invoice = $this->supplierInvoices[0];
+
+        // Taken over: posted, its answer lost. It may be on the platform: not sent again by the scheduler.
+        self::assertCount(1, $this->statusesPosted());
+        $status = $invoice->getStatuses()[0];
+        self::assertSame([false, true], [$status['sent'], $status['unknown'] ?? false]);
+        self::assertStringContainsString('may have been taken', (string) $status['error']);
+        self::assertSame(0, $invoices->sendPending());
+        self::assertCount(1, $this->statusesPosted(), 'nothing sent twice');
+
+        // A person found it was not there: sent again, once.
+        self::assertTrue($invoices->confirmStatus($invoice, 0, false));
+        self::assertCount(2, $this->statusesPosted());
+        self::assertSame([true, false], [$invoice->getStatuses()[0]['sent'], $invoice->getStatuses()[0]['unknown']]);
+        self::assertFalse($invoices->confirmStatus($invoice, 0, false), 'settled: nothing more to confirm');
+
+        // The approval's answer lost too; the person sees it on the platform: marked sent, nothing posted.
+        $this->lostStatus = true;
+        $invoices->book($invoice, '6061');
+        self::assertCount(3, $this->statusesPosted());
+        self::assertTrue($invoices->confirmStatus($invoice, 1, true));
+        self::assertCount(3, $this->statusesPosted());
+        self::assertSame([true, true], array_column($invoice->getStatuses(), 'sent'));
     }
 
     public function testThePlatformUnreachableKeepsTheCursorAndSaysSo(): void

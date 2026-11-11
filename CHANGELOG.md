@@ -10,6 +10,23 @@
   Needs omnibase/admin from that step, which every site on omnisense/omnibase 5.x has. tests/Controller/Admin/RecordHooksTest.
 
 ### Changed
+- On omnisense/omnibill 1.2 (what the ledger asked of it, 2026-11-11):
+  - A record sent to the accountant's software whose answer was lost after it left (omnibill's
+    `OutcomeUnknownException`) is `ExportState::UNKNOWN`, never sent again as it is: an entry is
+    looked up first by its key (`EntryLookupInterface::findEntry()`, odoo and pennylane), sent again only
+    when the software has none; a contact, or an entry on a gateway that cannot be asked, waits for a
+    person (« Vérifier et renvoyer », `AccountingExporter::retry()`). `FAILED` is now a record that never
+    reached the software. No schema change (the state is a string).
+  - The suppliers' invoices are read from the inbox by kind (`Receive` with `[FlowKind::INVOICE]`): the
+    statuses about the application's own invoices are no longer read and skipped on the same cursor.
+  - The paid status carries the amount at each VAT rate (`StatusChange::$amounts`), kept with the status.
+  - The lifecycle message is written by the application's `Omnibill\Writer\LifecycleMessageWriterInterface`
+    (omnibill's extension point, handed the `StatusChange` and the invoice's `Flow`), in place of the
+    ledger's own `Omnibill\Invoice\LifecycleMessageInterface`, removed (no site implemented it).
+  - A status whose answer was lost waits for a person instead of being sent again by the scheduler:
+    « Reçu par la plateforme » or « Absent : renvoyer » on the invoice's page (`SupplierInvoices::confirmStatus()`,
+    `ledger_admin_invoice_status`).
+  - Needs omnisense/omnibill 1.2 where omnibill is installed (it stays a suggestion).
 - Accepts omnisense/omnibase 5.0 (`3.0.*-dev || 4.0.*-dev || 5.0.*-dev`; plan "omnibase agnostic", step S): the bundle runs
   unchanged on it, `Base\Bundle\AbstractBaseBundle` and the other former names it uses being aliases of
   omnibridge/symfony's classes there. The sites on 4.x resolve as before.
