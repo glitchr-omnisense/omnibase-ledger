@@ -24,7 +24,7 @@ class AggregatesTest extends InMemoryDashboard
         foreach ($days as $day) {
             $byDay[$day->getDay()->format('Y-m-d')] = $day;
         }
-        $works = $byDay[$this->today()->modify('-6 days')->format('Y-m-d')];
+        $works = $byDay[$this->worksOn->format('Y-m-d')];
         self::assertSame(235000, $works->getOutflow());
         self::assertSame(1, $works->getOutflowCount());
         self::assertSame(235000, $works->getTransferOut(), 'a line with the counterparty\'s IBAN is a transfer');
@@ -88,8 +88,9 @@ class AggregatesTest extends InMemoryDashboard
         self::assertArrayNotHasKey('Old Software', $flows, 'stopped in the spring: no longer recurring');
         self::assertArrayNotHasKey('Plomberie Kieffer', $flows, 'once is not a rhythm');
 
-        $next = $flows['Pret Immobilier']->occurrencesBetween($this->today(), $this->today()->modify('+90 days'));
-        self::assertCount(3, $next, 'three instalments in 90 days');
+        // Three months ahead, whatever day today is (90 days hold two or three of them).
+        $next = $flows['Pret Immobilier']->occurrencesBetween($this->today(), $this->today()->modify('+3 months'));
+        self::assertCount(3, $next, 'three instalments in three months');
         self::assertSame(BankRecurring::step(new \DateTimeImmutable('2026-01-31'), BankRecurring::MONTHLY)->format('Y-m-d'), '2026-02-28', 'a 31st falls on the month\'s last day');
     }
 }

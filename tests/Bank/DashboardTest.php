@@ -102,7 +102,16 @@ class DashboardTest extends InMemoryDashboard
         self::assertSame([30, 60, 90], array_keys($forecast['horizons']));
         self::assertGreaterThan(0, $forecast['flows']);
         self::assertCount(91, $forecast['series']);
-        // Three months of the rent in, the instalment, the fees and the saving out.
-        self::assertSame(2500000 + 3 * (160000 - 126500 - 1250 - 50000), $forecast['horizons'][90] ?? null, 'each flow three times in 90 days');
+        // The rent in, the instalment, the fees and the saving out, each as often as it falls in
+        // the 90 days - two to four times, as the day of the month goes -, one due today from tomorrow.
+        $flows = array_values(array_filter($this->recurringFlows, fn ($f) => $f->getBankAccount() === $this->bankAccount()));
+        self::assertSame(160000 - 126500 - 1250 - 50000, array_sum(array_map(static fn ($f) => $f->getAmount(), $flows)), 'the four monthly flows');
+        $expected = 2500000;
+        foreach ($flows as $flow) {
+            $times = \count($flow->occurrencesBetween($this->today()->modify('-1 day'), $this->today()->modify('+90 days')));
+            self::assertContains($times, [2, 3, 4], $flow->getLabel());
+            $expected += $times * $flow->getAmount();
+        }
+        self::assertSame($expected, $forecast['horizons'][90] ?? null, 'each flow as many times as it falls in 90 days');
     }
 }

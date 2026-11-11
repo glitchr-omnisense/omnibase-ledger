@@ -46,6 +46,11 @@ abstract class InMemoryDashboard extends InMemoryLedger
     protected array $connectionsList = [];
     /** The current account's lines, as folded. */
     protected array $checkingLines = [];
+    /** The day of the one-off works invoice: about a week ago, on a day no monthly line falls on. */
+    protected \DateTimeImmutable $worksOn;
+
+    /** The days of the month the monthly lines fall on: the rent, the instalment, the fees, the saving. */
+    private const MONTHLY_DAYS = [4, 10, 11, 15];
 
     protected function today(): \DateTimeImmutable
     {
@@ -83,13 +88,18 @@ abstract class InMemoryDashboard extends InMemoryLedger
                 [10, -12_50, 'FRAIS TENUE DE COMPTE', 'Crédit Mutuel', null, TransactionCategory::BANK_FEES],
                 [14, -500_00, 'VIR LIVRET A', 'Meyers', 'FR7610278010000000000067890', TransactionCategory::TRANSFER],
             ] as [$day, $amount, $label, $name, $iban, $category]) {
-                if ($month->modify("+$day days") <= $this->today()) {
+                // Until yesterday: the bank's balance is yesterday's, and no line came since, whatever day today is.
+                if ($month->modify("+$day days") < $this->today()) {
                     $lines[] = $this->line($amount, $label, $name, $iban, $category, $month->modify("+$day days"));
                 }
             }
         }
         // A one-off, and a subscription that stopped in the spring.
-        $lines[] = $this->line(-2350_00, 'VIR PLOMBERIE KIEFFER FA-2026-118', 'Plomberie Kieffer', 'FR7617806000000000000000777', null, $this->today()->modify('-6 days'));
+        $this->worksOn = $this->today()->modify('-6 days');
+        while (\in_array((int) $this->worksOn->format('j'), self::MONTHLY_DAYS, true)) {
+            $this->worksOn = $this->worksOn->modify('-1 day');
+        }
+        $lines[] = $this->line(-2350_00, 'VIR PLOMBERIE KIEFFER FA-2026-118', 'Plomberie Kieffer', 'FR7617806000000000000000777', null, $this->worksOn);
         foreach ([9, 8, 7, 6] as $ago) {
             $lines[] = $this->line(-29_99, 'CB OLD SOFTWARE', null, null, TransactionCategory::SUBSCRIPTIONS, $this->today()->modify('first day of this month')->modify("-$ago months +19 days"));
         }

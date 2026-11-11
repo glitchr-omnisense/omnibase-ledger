@@ -171,7 +171,8 @@ class BankWidgetsTest extends InMemoryDashboard
 
         self::assertStringContainsString('ld-bar ld-bar-out is-clipped', $html);
         self::assertStringContainsString('Barres coupées au-delà de', $html);
-        self::assertMatchesRegularExpression('/ld-clip-value">200\sk€/u', $html, 'its value written in full');
+        // 200 to 202 k€: the week or the month holding it holds the instalment and the fees too on some days of the year.
+        self::assertMatchesRegularExpression('/ld-clip-value">20[0-2]\sk€/u', $html, 'its value written in full');
         self::assertSame(2400, \Base\Ledger\Admin\Widget\Chart::robustMax([2400, 2000, 1500, 1800]), 'nothing towering: the largest');
         self::assertSame(2000, \Base\Ledger\Admin\Widget\Chart::robustMax([2000000, 2000, 1500, 1800]));
         self::assertSame(2000, \Base\Ledger\Admin\Widget\Chart::robustMax([2000000, 900000, 2000, 1500]), 'two towering ones');
