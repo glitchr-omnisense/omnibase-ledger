@@ -12,7 +12,7 @@ use Tests\Base\Ledger\InMemoryLedger;
 
 class MatcherTest extends InMemoryLedger
 {
-    private const DUPONT_IBAN = 'FR76 1027 8060 0000 0202 7280 109';
+    private const DUPONT_IBAN = 'FR76 3000 6000 0198 7654 3210 173';
 
     /** @return list<Suggestion> at or above the auto threshold */
     private static function sure(array $suggestions): array

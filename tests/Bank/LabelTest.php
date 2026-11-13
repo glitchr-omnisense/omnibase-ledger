@@ -5,7 +5,7 @@ namespace Tests\Base\Ledger\Bank;
 use Base\Ledger\Bank\Label;
 use PHPUnit\Framework\TestCase;
 
-/** A bank label as a person reads it, on the labels of meyers' demo statements. */
+/** A bank label as a person reads it, on the labels of a site's demo statements. */
 class LabelTest extends TestCase
 {
     public static function labels(): iterable

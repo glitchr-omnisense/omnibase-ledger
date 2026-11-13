@@ -17,24 +17,24 @@ class PartiesTest extends InMemoryLedger
     public function testAPartyIsCreatedOnceWithItsAuxiliaryAccount(): void
     {
         $parties = $this->parties();
-        $party = $parties->partyFor($this->book, 'tenant', 'U3-2026', 'Jean Dupont', 'fr76 1027 8060 0000 0202 7280 109');
+        $party = $parties->partyFor($this->book, 'tenant', 'U3-2026', 'Jean Dupont', 'FR76 3000 6000 0198 7654 3210 173');
 
         self::assertSame(PartyKind::TENANT, $party->getKind());
         self::assertSame('411U32026', $party->getAccountNumber());
-        self::assertSame('FR7610278060000002027280109', $party->getIban());
+        self::assertSame('FR7630006000019876543210173', $party->getIban());
         self::assertSame('Jean Dupont', $this->accounts['411U32026']->getLabel());
         self::assertSame(AccountType::ASSET, $this->accounts['411U32026']->getType());
 
         $again = $this->parties()->partyFor($this->book, PartyKind::TENANT, 'U3-2026', 'Jean et Marie Dupont');
         self::assertSame($party, $again);
         self::assertSame('Jean et Marie Dupont', $party->getName());
-        self::assertSame('FR7610278060000002027280109', $party->getIban());
+        self::assertSame('FR7630006000019876543210173', $party->getIban());
     }
 
     public function testEachKindUnderItsCollectiveAccountAndNumbersStayUnique(): void
     {
         $supplier = $this->parties()->partyFor($this->book, PartyKind::SUPPLIER, 'EDF', 'EDF');
-        $associate = $this->parties()->partyFor($this->book, PartyKind::ASSOCIATE, 'M1', 'Marco Meyer');
+        $associate = $this->parties()->partyFor($this->book, PartyKind::ASSOCIATE, 'M1', 'Alex Martin');
         $twin = $this->parties()->partyFor($this->book, PartyKind::SUPPLIER, 'E.D.F', 'EDF Entreprises');
 
         self::assertSame('401EDF', $supplier->getAccountNumber());

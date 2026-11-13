@@ -83,10 +83,10 @@ abstract class InMemoryDashboard extends InMemoryLedger
         for ($m = 11; $m >= 0; --$m) {
             $month = $this->today()->modify('first day of this month')->modify("-$m months");
             foreach ([
-                [3, 1600_00, 'VIR SEPA WEBER THOMAS LOYER', 'Thomas Weber', 'FR7610278000000000000000001', TransactionCategory::INCOME],
+                [3, 1600_00, 'VIR SEPA WEBER THOMAS LOYER', 'Thomas Weber', 'FR7630006000000000000000001', TransactionCategory::INCOME],
                 [9, -1265_00, 'ECHEANCE PRET IMMOBILIER 00412', 'Crédit Mutuel', null, TransactionCategory::LOAN],
                 [10, -12_50, 'FRAIS TENUE DE COMPTE', 'Crédit Mutuel', null, TransactionCategory::BANK_FEES],
-                [14, -500_00, 'VIR LIVRET A', 'Meyers', 'FR7610278010000000000067890', TransactionCategory::TRANSFER],
+                [14, -500_00, 'VIR LIVRET A', 'SCI Exemple', 'FR7630006010000000000067890', TransactionCategory::TRANSFER],
             ] as [$day, $amount, $label, $name, $iban, $category]) {
                 // Until yesterday: the bank's balance is yesterday's, and no line came since, whatever day today is.
                 if ($month->modify("+$day days") < $this->today()) {
@@ -99,7 +99,7 @@ abstract class InMemoryDashboard extends InMemoryLedger
         while (\in_array((int) $this->worksOn->format('j'), self::MONTHLY_DAYS, true)) {
             $this->worksOn = $this->worksOn->modify('-1 day');
         }
-        $lines[] = $this->line(-2350_00, 'VIR PLOMBERIE KIEFFER FA-2026-118', 'Plomberie Kieffer', 'FR7617806000000000000000777', null, $this->worksOn);
+        $lines[] = $this->line(-2350_00, 'VIR PLOMBERIE DURAND FA-2026-118', 'Plomberie Durand', 'FR7617806000000000000000777', null, $this->worksOn);
         foreach ([9, 8, 7, 6] as $ago) {
             $lines[] = $this->line(-29_99, 'CB OLD SOFTWARE', null, null, TransactionCategory::SUBSCRIPTIONS, $this->today()->modify('first day of this month')->modify("-$ago months +19 days"));
         }

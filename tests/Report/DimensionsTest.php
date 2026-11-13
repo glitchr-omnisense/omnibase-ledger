@@ -30,7 +30,7 @@ class DimensionsTest extends InMemoryLedger
 
             public function labels(string $axis, array $values): array
             {
-                return array_intersect_key(['3' => 'Appartement Krutenau', '5' => 'Studio Neudorf'], array_flip($values));
+                return array_intersect_key(['3' => 'Appartement A', '5' => 'Studio B'], array_flip($values));
             }
         }]);
 
@@ -67,17 +67,17 @@ class DimensionsTest extends InMemoryLedger
         $report = (new IncomeStatement($this->lineRepository(), $this->dimensions))->byDimension($this->book, new \DateTimeImmutable('2026-01-01'), new \DateTimeImmutable('2026-12-31'), 'unit');
 
         self::assertSame('unit', $report['axis']);
-        self::assertSame([['3', 'Appartement Krutenau', 55000], ['5', 'Studio Neudorf', 52000], [null, null, -1200]], array_map(fn (array $group) => [$group['value'], $group['label'], $group['report']['totals']['result']], $report['groups']));
+        self::assertSame([['3', 'Appartement A', 55000], ['5', 'Studio B', 52000], [null, null, -1200]], array_map(fn (array $group) => [$group['value'], $group['label'], $group['report']['totals']['result']], $report['groups']));
         self::assertSame(['income' => 137000, 'expenses' => 31200, 'result' => 105800], $report['totals'], 'the whole: the groups add up');
 
         $groups = (new GeneralLedger($this->lineRepository(), $this->dimensions))->byDimension($this->book, null, null, 'unit', '7');
-        self::assertSame([['Appartement Krutenau', 85000], ['Studio Neudorf', 52000]], array_map(fn (array $group) => [$group['label'], $group['accounts'][0]['credit']], $groups));
+        self::assertSame([['Appartement A', 85000], ['Studio B', 52000]], array_map(fn (array $group) => [$group['label'], $group['accounts'][0]['credit']], $groups));
         self::assertSame(['unit' => 2], $this->lineRepository()->axes($this->book));
     }
 
     public function testAValueNobodyNamesIsItsOwnLabel(): void
     {
-        self::assertSame(['9' => '9', '3' => 'Appartement Krutenau'], $this->dimensions->labels('unit', ['9', '3', null]));
+        self::assertSame(['9' => '9', '3' => 'Appartement A'], $this->dimensions->labels('unit', ['9', '3', null]));
         self::assertSame(['1' => '1'], (new Dimensions())->labels('owner', ['1']));
     }
 }

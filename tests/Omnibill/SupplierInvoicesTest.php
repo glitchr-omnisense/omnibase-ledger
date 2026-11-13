@@ -284,7 +284,7 @@ class SupplierInvoicesTest extends InMemoryOmnibill
     public function testASupplierTheBookDoesNotKnowIsCreatedWhenBookedAndAnAccountIsAPersonsChoice(): void
     {
         $invoices = $this->supplierInvoices();
-        $invoice = $invoices->import(Invoices::cii(['seller' => 'Plomberie Kléber', 'siren' => '901234567', 'vat_number' => null, 'iban' => null]), 'kleber.xml');
+        $invoice = $invoices->import(Invoices::cii(['seller' => 'Plomberie Hérisson', 'siren' => '901234567', 'vat_number' => null, 'iban' => null]), 'herisson.xml');
 
         self::assertSame(SupplierInvoiceStatus::PROPOSED, $invoice->getStatus());
         self::assertNull($invoice->getParty());
@@ -293,12 +293,12 @@ class SupplierInvoicesTest extends InMemoryOmnibill
 
         $entry = $invoices->book($invoice, '615');
         $party = $invoice->getParty();
-        self::assertSame([PartyKind::SUPPLIER, 'Plomberie Kléber', 'siren:901234567', '401PLOMBERIEK'], [$party?->getKind(), $party?->getName(), $party?->getReference(), $party?->getAccountNumber()]);
+        self::assertSame([PartyKind::SUPPLIER, 'Plomberie Hérisson', 'siren:901234567', '401PLOMBERIEK'], [$party?->getKind(), $party?->getName(), $party?->getReference(), $party?->getAccountNumber()]);
         self::assertSame('401PLOMBERIEK', $entry->getLines()->last()->getAccount()->getNumber());
         self::assertSame([], $invoice->getStatuses(), 'dropped by hand: no platform to tell');
 
         // Next time, the supplier and its account are proposed.
-        $next = $invoices->import(Invoices::cii(['seller' => 'Plomberie Kleber SARL', 'siren' => '901234567', 'number' => 'K-77', 'vat_number' => null, 'iban' => null]), 'kleber-2.xml');
+        $next = $invoices->import(Invoices::cii(['seller' => 'Plomberie Herisson SARL', 'siren' => '901234567', 'number' => 'K-77', 'vat_number' => null, 'iban' => null]), 'herisson-2.xml');
         self::assertSame([$party, '615'], [$next->getParty(), $next->getAccount()]);
     }
 

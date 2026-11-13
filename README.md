@@ -36,13 +36,13 @@ Double-entry accounting for [omnibase](https://github.com/glitchr-omnisense/omni
 ## Requirements
 
 - PHP 8.2+, `ext-sodium`
-- `omnisense/omnibase` 3.0, 4.0 or 5.0, `omnibase/admin`
+- `omnisense/omnibase` 5.1 or later (5.x), `omnibase/admin`
 - `omnisense/omnibank` 1.x with the gateways you use (`omnibank/files`, `omnibank/qonto`, `omnibank/powens`, `omnibank/bridge`). Without it, the ledger, lettering and reports still work, and the bank screens say Omnibank is missing.
 
 ## Installation
 
 ```bash
-composer require omnibase/ledger:dev-main omnisense/omnibank:1.x-dev omnibank/files:1.x-dev
+composer require omnibase/ledger omnibank/files
 ```
 
 ```php

@@ -94,13 +94,13 @@ class DeskTest extends InMemoryLedger
 
     public function testASplitSpreadsTheLineOverACategoryAndOpenItems(): void
     {
-        $associate = $this->party('Claire Meyer', PartyKind::ASSOCIATE, 'CM');
-        $plumber = $this->party('Plomberie Kieffer', PartyKind::SUPPLIER, 'PK');
+        $associate = $this->party('Claire Martin', PartyKind::ASSOCIATE, 'CM');
+        $plumber = $this->party('Plomberie Durand', PartyKind::SUPPLIER, 'PK');
         $invoice = $this->invoice($plumber, 40000, 'FA-118');
         $line = $this->bankLine(-61210, 'DEBIT MENSUEL CARTE');
 
         $entry = $this->desk()->split($line, [
-            ['amount' => 40000, 'items' => [$invoice->getId()], 'label' => 'Facture Kieffer'],
+            ['amount' => 40000, 'items' => [$invoice->getId()], 'label' => 'Facture Durand'],
             ['amount' => 15000, 'account' => '455', 'party' => $associate->getId()],
             ['amount' => 6210, 'account' => '6257'],
         ]);

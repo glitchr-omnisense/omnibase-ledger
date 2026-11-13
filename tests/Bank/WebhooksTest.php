@@ -104,7 +104,7 @@ final class WebhooksTest extends TestCase
 
     public function testNothingRegisteredOnALocalHostNorOverAConfiguredSecret(): void
     {
-        self::assertSame(Webhooks::UNREACHABLE, $this->webhooks(host: 'https://meyers.local')->ensure('hooked'));
+        self::assertSame(Webhooks::UNREACHABLE, $this->webhooks(host: 'https://exemple.local')->ensure('hooked'));
         self::assertNotNull($this->webhooks(host: 'https://localhost:8463')->unreachable('hooked'));
         self::assertSame(Webhooks::CONFIGURED, $this->webhooks(['webhook_secret' => 'from_env'])->ensure('hooked'));
         self::assertSame([], HookedBank::$endpoints);

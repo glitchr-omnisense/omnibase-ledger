@@ -1,0 +1,26 @@
+# The bundle's CI: glitchr-studio/ci's reusable workflow, pinned - the PHP 8.4 image, the bundle installed
+# alone at the default stability (no site, dependencies resolved afresh), composer validate, its PHPUnit
+# suite (the tests that need a host application's kernel skip themselves; they run in omnisense/omnibase's
+# harness), then a consumer install without require-dev in which every file of src/ is linted and the
+# bundle class autoloaded. PHPStan is not run yet: the bundle has no baseline.
+name: ci
+
+on:
+  push:
+    branches: ['main']
+  pull_request:
+  workflow_dispatch:
+  # release.yml runs this CI on a tag before the release.
+  workflow_call:
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  package:
+    uses: glitchr-studio/ci/.github/workflows/php-package.yml@133c7eda3cd536a2e3478474ead380257375589e # main, 2026-11-09
+    with:
+      phpstan: false
+      smoke-class: 'Base\Ledger\LedgerBundle'
+      consumer-script: 'find "$PACKAGE_DIR/src" -name "*.php" -print0 | xargs -0 -n1 php -l > /dev/null'

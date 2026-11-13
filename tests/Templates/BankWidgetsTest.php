@@ -150,7 +150,7 @@ class BankWidgetsTest extends InMemoryDashboard
         self::assertStringContainsString('ledger_admin_bank_sync', $freshness);
 
         $movements = $this->render(Bank\MovementsWidgetType::class);
-        self::assertStringContainsString('Plomberie Kieffer', $movements, 'the largest of the month');
+        self::assertStringContainsString('Plomberie Durand', $movements, 'the largest of the month');
         self::assertMatchesRegularExpression('/2\s350,00/u', $movements);
     }
 
@@ -166,7 +166,7 @@ class BankWidgetsTest extends InMemoryDashboard
     public function testAHeavyMonthIsClippedNotFlatteningTheOthers(): void
     {
         // A term deposit opened two months ago: 200 000,00 out in a day, where a month moves 2 000,00.
-        $this->fold($this->bankAccount(), [...$this->checkingLines, $this->line(-20000000, 'VIR COMPTE A TERME', 'Meyers', null, \Omnibank\Model\TransactionCategory::SAVINGS, $this->today()->modify('first day of this month')->modify('-2 months +5 days'))]);
+        $this->fold($this->bankAccount(), [...$this->checkingLines, $this->line(-20000000, 'VIR COMPTE A TERME', 'SCI Exemple', null, \Omnibank\Model\TransactionCategory::SAVINGS, $this->today()->modify('first day of this month')->modify('-2 months +5 days'))]);
         $html = $this->render(Bank\StatisticsWidgetType::class, ['period' => '12m']);
 
         self::assertStringContainsString('ld-bar ld-bar-out is-clipped', $html);

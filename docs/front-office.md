@@ -20,7 +20,7 @@ and `LEDGER_MANAGE` (to act): `ledger.admin_role` by default, or what an applica
 told -, who reads it but may not change it a 403 on each action. The book is `?book=`, else the
 first one the user may see; several books give a switcher in the heading.
 
-The application links it from where its team starts (meyers: « La comptabilité » on « Mon
+The application links it from where its team starts (for one, « La comptabilité » on « Mon
 accès », shown when `is_granted('LEDGER_VIEW')`).
 
 ## What it shows

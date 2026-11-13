@@ -34,7 +34,7 @@ class LedgerVoterTest extends TestCase
 
     public function testTheApplicationGrantsABookThroughBookAccess(): void
     {
-        $mine = new Book('SCI des Meyer');
+        $mine = new Book('SCI Exemple');
         $access = new class($mine) implements BookAccessInterface {
             public function __construct(private readonly Book $book) {}
             public function canView(UserInterface $user, Book $book): bool { return $book === $this->book; }

@@ -12,7 +12,7 @@ use Tests\Base\Ledger\InMemoryLedger;
  * receipts' directory under the line's year and month, named after the
  * line, read back; taken off the line, the file stays; a file that is no
  * photo nor PDF refused. (With the drive, the same goes to the Partage:
- * meyers' functional test.)
+ * a site's functional test.)
  */
 class ReceiptsTest extends InMemoryLedger
 {

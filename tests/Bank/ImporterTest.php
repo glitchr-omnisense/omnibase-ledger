@@ -20,7 +20,7 @@ class ImporterTest extends InMemoryLedger
 
     private static function transaction(string $id, int $amount, string $label = 'VIR SEPA', string $date = '2026-10-05'): BankTransaction
     {
-        return new BankTransaction($id, new \DateTimeImmutable($date), null, new Money($amount, 'EUR'), $label, 'M DUPONT', 'FR76 1027 8060 0000 0202 7280 109', 'AVIS-U3', ['bank' => 'raw']);
+        return new BankTransaction($id, new \DateTimeImmutable($date), null, new Money($amount, 'EUR'), $label, 'M DUPONT', 'FR76 3000 6000 0198 7654 3210 173', 'AVIS-U3', ['bank' => 'raw']);
     }
 
     public function testEachTransactionBecomesOneLineOnce(): void
@@ -31,7 +31,7 @@ class ImporterTest extends InMemoryLedger
         self::assertSame(2, $importer->import($account, [self::transaction('t1', 85000), self::transaction('t2', -1250, 'FRAIS'), self::transaction('t1', 85000)]));
         self::assertCount(2, $this->bankLines);
         $line = $this->bankLines[0];
-        self::assertSame([85000, 'EUR', 'VIR SEPA', 'M DUPONT', 'FR7610278060000002027280109', 'AVIS-U3'], [$line->getAmount(), $line->getCurrency(), $line->getLabel(), $line->getCounterpartyName(), $line->getCounterpartyIban(), $line->getReference()]);
+        self::assertSame([85000, 'EUR', 'VIR SEPA', 'M DUPONT', 'FR7630006000019876543210173', 'AVIS-U3'], [$line->getAmount(), $line->getCurrency(), $line->getLabel(), $line->getCounterpartyName(), $line->getCounterpartyIban(), $line->getReference()]);
         self::assertSame(BankLineStatus::UNMATCHED, $line->getStatus());
 
         // Again, corrected by the bank: updated while pending, untouched once reconciled.

@@ -65,7 +65,7 @@ class TemplatesTest extends InMemoryLedger
         $dupont = $this->party('Jean Dupont', reference: 'U3');
         $this->notice($dupont, 85000, 'AVIS-2026-10-U3');
         $this->rules = [$this->persisted(new ReconciliationRule($this->book, 'Frais', 'FRAIS', $this->accounts['627'], RuleSign::OUT))];
-        $line = $this->bankLine(85000, 'VIR SEPA AVIS-2026-10-U3', 'FR7610278060000002027280109', 'M DUPONT');
+        $line = $this->bankLine(85000, 'VIR SEPA AVIS-2026-10-U3', 'FR7630006000019876543210173', 'M DUPONT');
         $done = $this->bankLine(-1250, 'FRAIS TENUE');
         $this->reconciler()->apply($done, $this->matcher()->suggest($done)[0]);
         $openItems = $this->matcher()->openItems($this->book);
@@ -158,21 +158,21 @@ class TemplatesTest extends InMemoryLedger
         $html = $this->block('@Ledger/admin/income_statement_by.html.twig', $context + [
             'by' => 'unit', 'axes' => ['unit' => 2], 'filter' => [], 'filter_labels' => [],
             'report' => ['axis' => 'unit', 'totals' => ['income' => 1000, 'expenses' => 0, 'result' => 1000], 'groups' => [
-                ['value' => '3', 'label' => 'Appartement Krutenau', 'report' => IncomeStatement::fromTotals([['number' => '706', 'label' => 'Loyers', 'type' => 'income', 'debit' => 0, 'credit' => 1000]])],
+                ['value' => '3', 'label' => 'Appartement A', 'report' => IncomeStatement::fromTotals([['number' => '706', 'label' => 'Loyers', 'type' => 'income', 'debit' => 0, 'credit' => 1000]])],
                 ['value' => null, 'label' => null, 'report' => IncomeStatement::fromTotals([])],
             ]],
         ]);
         self::assertStringContainsString('<th>Bien</th>', $html);
-        self::assertStringContainsString('Appartement Krutenau', $html);
+        self::assertStringContainsString('Appartement A', $html);
         self::assertStringContainsString('Non affecté', $html);
         self::assertStringContainsString('dimension%5Bunit%5D=3', $html);
         self::assertStringContainsString('<option value="unit" selected>Bien</option>', $html);
 
         $html = $this->block('@Ledger/admin/income_statement.html.twig', $context + [
             'compare' => false, 'previous_from' => $context['from'], 'previous_to' => $context['to'], 'report' => IncomeStatement::fromTotals([]),
-            'axes' => ['unit' => 2], 'filter' => ['unit' => '3'], 'filter_labels' => ['unit' => 'Appartement Krutenau'], 'by' => null,
+            'axes' => ['unit' => 2], 'filter' => ['unit' => '3'], 'filter_labels' => ['unit' => 'Appartement A'], 'by' => null,
         ]);
-        self::assertStringContainsString('Bien : Appartement Krutenau', $html);
+        self::assertStringContainsString('Bien : Appartement A', $html);
         self::assertStringContainsString('<input type="hidden" name="dimension[unit]" value="3">', $html);
     }
 

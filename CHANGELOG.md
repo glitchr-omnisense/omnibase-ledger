@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+## [1.0.0] — 2026-11-13
+
+First stable release.
+
+### Changed
+- Stable requirements, so that `composer require omnibase/ledger` installs at Packagist's default stability:
+  `omnisense/omnibase` ^5.1 (in place of `3.x || 4.0 || 5.0` dev branches), `omnibridge/symfony` ^1.1, `omnibase/admin` ^1.0, `omnisense/omnibank` ^1.0, `doctrine/doctrine-bundle` ^2.10 || ^3.0;
+  no `minimum-stability: dev`; the branch alias `dev-main` → `1.x-dev`.
+- CI: `.github/workflows/ci.yml` (glitchr-studio/ci's php-package workflow, pinned: the bundle installed alone,
+  composer validate, PHPUnit, a consumer install without require-dev with `src/` linted and the bundle class
+  autoloaded) and `release.yml` (that CI on a tag, then the release).
+- Installation: `composer require omnibase/ledger omnibank/files`.
+- Neutral example data in docs and tests.
+
 ### Fixed
 - The back office's screens write through omnibase/admin's hooks on the persistence the site chose: `PartyCrudController`
   numbers a new tiers' auxiliary account and opens its account in `persistRecord()`, asking the unit of work's repositories
@@ -218,7 +232,7 @@
 - The dashboard's « Comptabilité » rows share the card's height when the card beside it is
   taller, instead of leaving it empty under « Trésorerie ».
 - A bank line no longer settles an open item dated more than `reconciliation.max_advance_days`
-  (new, 45 by default) after it: on meyers, a rent notice for November 2026 was auto-reconciled
+  (new, 45 by default) after it: on a site, a rent notice for November 2026 was auto-reconciled
   with a tenant's transfer of October 2025 of the same amount, still to reconcile in the history.
 - `Reconciler::undo()` of a reconciled line dispatches `BankLineUnreconciled` (`line`, `entry`,
   `reversal`): what followed `BankLineReconciled` (omnibase/estate's rent call paid) can be undone

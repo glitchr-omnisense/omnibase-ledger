@@ -86,7 +86,7 @@ class AggregatesTest extends InMemoryDashboard
         self::assertSame(-1250, $flows['Frais Tenue Compte']->getAmount());
 
         self::assertArrayNotHasKey('Old Software', $flows, 'stopped in the spring: no longer recurring');
-        self::assertArrayNotHasKey('Plomberie Kieffer', $flows, 'once is not a rhythm');
+        self::assertArrayNotHasKey('Plomberie Durand', $flows, 'once is not a rhythm');
 
         // Three months ahead, whatever day today is (90 days hold two or three of them).
         $next = $flows['Pret Immobilier']->occurrencesBetween($this->today(), $this->today()->modify('+3 months'));

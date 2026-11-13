@@ -127,7 +127,7 @@ class StatementsTest extends InMemoryLedger
             ['number' => '411U3', 'label' => 'Dupont', 'type' => 'asset', 'debit' => 85000, 'credit' => 0],
             ['number' => '411U4', 'label' => 'Martin (trop-perçu)', 'type' => 'asset', 'debit' => 0, 'credit' => 5000],
             ['number' => '409', 'label' => 'Acompte fournisseur', 'type' => 'asset', 'debit' => 12000, 'credit' => 0],
-            ['number' => '455M1', 'label' => 'M. Meyer', 'type' => 'liability', 'debit' => 3000, 'credit' => 0],
+            ['number' => '455M1', 'label' => 'A. Martin', 'type' => 'liability', 'debit' => 3000, 'credit' => 0],
             ['number' => '512', 'label' => 'Banque (découvert)', 'type' => 'asset', 'debit' => 0, 'credit' => 40000],
             ['number' => '706', 'label' => 'Loyers', 'type' => 'income', 'debit' => 0, 'credit' => 55000],
         ]);
@@ -173,7 +173,7 @@ class StatementsTest extends InMemoryLedger
     private function twoYears(): void
     {
         $this->party('Jean Dupont', reference: 'U3');
-        $this->party('Marco Meyer', PartyKind::ASSOCIATE, 'M1');
+        $this->party('Alex Martin', PartyKind::ASSOCIATE, 'M1');
         $this->party('Plomberie Muller', PartyKind::SUPPLIER, 'MULLER');
         $this->party('Cabinet comptable', PartyKind::SUPPLIER, 'EXPERT');
         $this->party('Trésor public', PartyKind::SUPPLIER, 'TRESOR');
