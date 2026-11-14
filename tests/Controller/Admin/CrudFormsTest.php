@@ -3,7 +3,6 @@
 namespace Tests\Base\Ledger\Controller\Admin;
 
 use Base\Field\FieldDescriptor;
-use Base\Field\Type\AssociationType;
 use Base\Ledger\Controller\Admin\Crud\AccountCrudController;
 use Base\Ledger\Controller\Admin\Crud\BankAccountCrudController;
 use Base\Ledger\Controller\Admin\Crud\BankConnectionCrudController;
@@ -23,6 +22,7 @@ use Base\Ledger\Enum\AccountType;
 use Base\Ledger\Enum\PartyKind;
 use Base\Ledger\Enum\RuleSign;
 use Doctrine\ORM\Mapping as ORM;
+use Omnibridge\Symfony\Omnibase\Field\Type\AssociationType;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Bridge\Doctrine\Form\Type\EntityType;
@@ -78,7 +78,8 @@ class CrudFormsTest extends TestCase
                     self::assertSame($enum, $field->getFormTypeOption('class'), $where);
                 }
                 if (null !== $target = self::targetOf($entity, (string) $field->getProperty())) {
-                    if (AssociationType::class === $field->getFormType()) {
+                    // is_a(): the field may name AssociationType by its former name (Base\Field\Type\...), an alias of it until 6.0
+                    if (is_a((string) $field->getFormType(), AssociationType::class, true)) {
                         self::assertSame([], self::enumsOf($target), $where.': AssociationType embeds '.$target.'\'s form, whose enum it prints in a text input');
                     } else {
                         self::assertSame(EntityType::class, $field->getFormType(), $where);

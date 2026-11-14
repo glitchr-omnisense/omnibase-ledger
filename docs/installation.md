@@ -32,7 +32,7 @@ composer require omnibase/ledger omnibank/files
 // config/bundles.php
 return [
     // ...
-    Base\BaseBundle::class => ['all' => true],
+    Omnibridge\Symfony\Omnibase\BaseBundle::class => ['all' => true],
     Base\Admin\AdminBundle::class => ['all' => true],
     Omnibank\Bridge\Symfony\OmnibankBundle::class => ['all' => true],
     Base\Ledger\LedgerBundle::class => ['all' => true],

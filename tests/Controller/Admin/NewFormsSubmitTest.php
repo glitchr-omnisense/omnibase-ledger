@@ -3,7 +3,7 @@
 namespace Tests\Base\Ledger\Controller\Admin;
 
 use Base\Field\FieldDescriptor;
-use Base\Field\Type\AssociationType;
+use Omnibridge\Symfony\Omnibase\Field\Type\AssociationType;
 use Base\Ledger\Controller\Admin\Crud\AccountCrudController;
 use Base\Ledger\Controller\Admin\Crud\BookCrudController;
 use Base\Ledger\Controller\Admin\Crud\FiscalYearCrudController;
@@ -25,8 +25,8 @@ use Base\Ledger\Enum\PartyKind;
 use Base\Ledger\Enum\RuleSign;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use Base\Field\Type\BooleanType;
-use Base\Field\Type\NumberType;
+use Omnibridge\Symfony\Omnibase\Field\Type\BooleanType;
+use Omnibridge\Symfony\Omnibase\Field\Type\NumberType;
 use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Form\Extension\Core\Type\EnumType;
@@ -119,7 +119,8 @@ class NewFormsSubmitTest extends TestCase
 
         $shown = [];
         foreach (self::fields($controller, FieldDescriptor::PAGE_NEW) as $property => $field) {
-            if (\in_array($field->getFormType(), [AssociationType::class, EntityType::class], true)) {
+            // is_a(): the field may name AssociationType by its former name (Base\Field\Type\...), an alias of it until 6.0
+            if (EntityType::class === $field->getFormType() || is_a((string) $field->getFormType(), AssociationType::class, true)) {
                 // A related record, chosen in a list by the back office: the record takes it through a setter.
                 self::assertTrue($accessor->isWritable($record, $property), $record::class.'::$'.$property.' is chosen in the form: it takes a setter');
                 continue;

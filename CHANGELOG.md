@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+## [1.0.1] — 2026-11-14
+
+### Changed
+- The current names of what moved to omnibridge/symfony, in place of the former ones the core keeps as aliases only
+  until 6.0: `Base\BaseBundle` → `Omnibridge\Symfony\Omnibase\BaseBundle`;
+  `Base\Bundle\AbstractBaseBundle` → `Omnibridge\Symfony\Omnibase\Bundle\AbstractBaseBundle`;
+  `Base\Bundle\AbstractBaseExtension` → `Omnibridge\Symfony\Omnibase\Bundle\AbstractBaseExtension`;
+  `Base\Field\Type\AssociationType` → `Omnibridge\Symfony\Omnibase\Field\Type\AssociationType`;
+  `Base\Field\Type\BooleanType` → `Omnibridge\Symfony\Omnibase\Field\Type\BooleanType`;
+  `Base\Field\Type\NumberType` → `Omnibridge\Symfony\Omnibase\Field\Type\NumberType`.
+  No behaviour change; the bundle no longer needs any alias of the core's `former-names*.php`.
+- Tests: CrudFormsTest and NewFormsSubmitTest recognise AssociationType with `is_a()` rather than a strict string
+  comparison, so that a field naming it by either name (omnibridge/symfony's kinds still give the former one) is
+  read as it was.
+
 ## [1.0.0] — 2026-11-13
 
 First stable release.

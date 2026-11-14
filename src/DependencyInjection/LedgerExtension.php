@@ -2,7 +2,7 @@
 
 namespace Base\Ledger\DependencyInjection;
 
-use Base\Bundle\AbstractBaseExtension;
+use Omnibridge\Symfony\Omnibase\Bundle\AbstractBaseExtension;
 use Symfony\Component\Config\Definition\Processor;
 use Symfony\Component\Config\FileLocator;
 use Symfony\Component\DependencyInjection\ContainerBuilder;
