@@ -12,7 +12,7 @@ use Base\Ledger\Repository\BankAccountRepository;
 use Base\Ledger\Repository\BankConnectionRepository;
 use Base\Ledger\Repository\JournalRepository;
 use Base\Ledger\Security\StateCipher;
-use Doctrine\ORM\EntityManagerInterface;
+use Base\Contract\UnitOfWork;
 use Omnibank\Model\Connection;
 use Omnibank\Model\Consent;
 use PHPUnit\Framework\TestCase;
@@ -32,7 +32,7 @@ class ConnectionsTest extends TestCase
         $repository->method('findBy')->willReturn($stored);
 
         return new Connections(
-            $this->createStub(EntityManagerInterface::class),
+            $this->createStub(UnitOfWork::class),
             new StateCipher($secret),
             $this->createStub(AccountRepository::class),
             $this->createStub(JournalRepository::class),

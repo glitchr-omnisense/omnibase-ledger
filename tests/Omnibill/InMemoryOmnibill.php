@@ -24,7 +24,7 @@ use Base\Ledger\Repository\BookRepository;
 use Base\Ledger\Repository\EntryLineRepository;
 use Base\Ledger\Repository\PartyRepository;
 use Base\Ledger\Service\Parties;
-use Doctrine\ORM\EntityManagerInterface;
+use Base\Contract\UnitOfWork;
 use Omnibill\Registry;
 use Omnibill\Writer\LifecycleMessageWriterInterface;
 use Tests\Base\Ledger\InMemoryLedger;
@@ -46,7 +46,7 @@ abstract class InMemoryOmnibill extends InMemoryLedger
     /** @var list<AccountingExportItem> */
     protected array $items = [];
     protected string $receiptsDirectory;
-    private ?EntityManagerInterface $em = null;
+    private ?UnitOfWork $em = null;
 
     protected function setUp(): void
     {
@@ -68,13 +68,13 @@ abstract class InMemoryOmnibill extends InMemoryLedger
         }
     }
 
-    protected function entityManager(): EntityManagerInterface
+    protected function unitOfWork(): UnitOfWork
     {
         if (null !== $this->em) {
             return $this->em;
         }
-        $ledger = parent::entityManager();
-        $em = $this->createStub(EntityManagerInterface::class);
+        $ledger = parent::unitOfWork();
+        $em = $this->createStub(UnitOfWork::class);
         $em->method('persist')->willReturnCallback(function (object $entity) use ($ledger): void {
             match (true) {
                 $entity instanceof SupplierInvoice => \in_array($entity, $this->supplierInvoices, true) || $this->supplierInvoices[] = $this->persisted($entity),
@@ -85,7 +85,6 @@ abstract class InMemoryOmnibill extends InMemoryLedger
             };
         });
         $em->method('flush')->willReturnCallback(fn () => $ledger->flush());
-        $em->method('find')->willReturnCallback(fn (string $class, mixed $id) => null);
 
         return $this->em = $em;
     }
@@ -155,7 +154,7 @@ abstract class InMemoryOmnibill extends InMemoryLedger
 
     protected function receipts(): Receipts
     {
-        return new Receipts($this->entityManager(), 'Comptabilité/Justificatifs', 'staff', $this->receiptsDirectory);
+        return new Receipts($this->unitOfWork(), 'Comptabilité/Justificatifs', 'staff', $this->receiptsDirectory);
     }
 
     protected function proposer(?string $defaultAccount = null): InvoiceProposer
@@ -166,8 +165,8 @@ abstract class InMemoryOmnibill extends InMemoryLedger
     protected function supplierInvoices(?Registry $registry = null, ?string $gateway = null, ?LifecycleMessageWriterInterface $messages = null): SupplierInvoices
     {
         return new SupplierInvoices(
-            $this->entityManager(), $this->supplierInvoiceRepository(), $this->inboxRepository(), $this->bookRepository(), $this->proposer(), new InvoiceReader(),
-            $this->posting(), new Parties($this->entityManager(), $this->partyRepository(), $this->accountRepository()), $this->receipts(), $registry, $gateway, null, $messages,
+            $this->unitOfWork(), $this->supplierInvoiceRepository(), $this->inboxRepository(), $this->bookRepository(), $this->proposer(), new InvoiceReader(),
+            $this->posting(), new Parties($this->unitOfWork(), $this->partyRepository(), $this->accountRepository()), $this->receipts(), $registry, $gateway, null, $messages,
         );
     }
 
@@ -184,6 +183,6 @@ abstract class InMemoryOmnibill extends InMemoryLedger
             fn (AccountingExportItem $i) => $i->getGateway() === $gw && $i->getKind() === $kind && $i->getRecordKey() === $key,
         ))[0] ?? null);
 
-        return new AccountingExporter($this->entityManager(), $this->entryRepository(), $runs, $items, registry: $registry, gateway: $gateway);
+        return new AccountingExporter($this->unitOfWork(), $this->entryRepository(), $runs, $items, registry: $registry, gateway: $gateway);
     }
 }

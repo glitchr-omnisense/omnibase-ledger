@@ -7,7 +7,7 @@ use Base\Ledger\Entity\Entry;
 use Base\Ledger\Entity\Party;
 use Base\Ledger\Omnibill\Enum\ExportState;
 use Base\Ledger\Omnibill\Repository\AccountingExportItemRepository;
-use Doctrine\ORM\Mapping as ORM;
+use Base\Mapping as ORM;
 
 /**
  * One record of the book as the accountant's software has it: an entry

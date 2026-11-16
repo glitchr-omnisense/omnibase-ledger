@@ -1,6 +1,6 @@
 <?php
 
-namespace Tests\Base\Ledger\Omnibill;
+namespace Tests\Base\Ledger\Persistence\Doctrine;
 
 use Doctrine\DBAL\DriverManager;
 use Doctrine\DBAL\Platforms\MySQL80Platform;
@@ -9,6 +9,7 @@ use Doctrine\ORM\Mapping\UnderscoreNamingStrategy;
 use Doctrine\ORM\ORMSetup;
 use Doctrine\ORM\Tools\SchemaTool;
 use Doctrine\ORM\Tools\SchemaValidator;
+use Omnibridge\Doctrine\DeclarationDriver;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -16,15 +17,21 @@ use PHPUnit\Framework\TestCase;
  * when omnisense/omnibill is installed: valid, and the tables a site's
  * migration adds then.
  */
-class MappingTest extends TestCase
+class OmnibillMappingTest extends TestCase
 {
     private static function entityManager(): EntityManager
     {
+        if (!class_exists(DeclarationDriver::class)) {
+            self::markTestSkipped('omnibridge/doctrine is needed to read the mapping on Doctrine.');
+        }
         if (!\extension_loaded('pdo_sqlite')) {
             self::markTestSkipped('pdo_sqlite is needed to build an entity manager.');
         }
-        $root = \dirname(__DIR__, 2).'/src';
+        $root = \dirname(__DIR__, 3).'/src';
         $config = ORMSetup::createAttributeMetadataConfiguration([$root.'/Entity', $root.'/Omnibill/Entity'], true);
+        // The entities are written in omnibase's vocabulary (Base\Mapping): Doctrine reads them through
+        // omnibridge/doctrine's declaration driver, as an application does.
+        $config->setMetadataDriverImpl(new DeclarationDriver($config->getMetadataDriverImpl()));
         $config->setNamingStrategy(new UnderscoreNamingStrategy(\CASE_LOWER, true));
         if (method_exists($config, 'enableNativeLazyObjects') && \PHP_VERSION_ID >= 80400) {
             $config->enableNativeLazyObjects(true);

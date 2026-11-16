@@ -19,7 +19,7 @@ use Base\Ledger\Repository\BankLineRepository;
 use Base\Ledger\Repository\TaxRepository;
 use Base\Ledger\Service\Lettering;
 use Base\Ledger\Service\Posting;
-use Doctrine\ORM\EntityManagerInterface;
+use Base\Contract\UnitOfWork;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 
@@ -38,7 +38,7 @@ use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 class Reconciler
 {
     public function __construct(
-        private readonly EntityManagerInterface $entityManager,
+        private readonly UnitOfWork $unitOfWork,
         private readonly Posting $posting,
         private readonly Lettering $lettering,
         private readonly Matcher $matcher,
@@ -131,7 +131,7 @@ class Reconciler
         }
 
         $line->setEntry($entry)->setStatus(BankLineStatus::RECONCILED)->countReconciliation();
-        $this->entityManager->flush();
+        $this->unitOfWork->flush();
         $this->dispatcher?->dispatch(new BankLineReconciled($line, $entry, $settled));
 
         return $entry;
@@ -163,7 +163,7 @@ class Reconciler
             }
             $line->setStatus([] === $suggestions ? BankLineStatus::UNMATCHED : BankLineStatus::SUGGESTED);
         }
-        $this->entityManager->flush();
+        $this->unitOfWork->flush();
 
         return $applied;
     }
@@ -175,7 +175,7 @@ class Reconciler
             throw new ReconciliationException(sprintf('%s is reconciled: undo it first.', $line));
         }
         $line->setStatus(BankLineStatus::IGNORED);
-        $this->entityManager->flush();
+        $this->unitOfWork->flush();
     }
 
     /**
@@ -188,7 +188,7 @@ class Reconciler
     {
         if (BankLineStatus::IGNORED === $line->getStatus() || BankLineStatus::SUGGESTED === $line->getStatus()) {
             $line->setStatus(BankLineStatus::UNMATCHED);
-            $this->entityManager->flush();
+            $this->unitOfWork->flush();
 
             return;
         }
@@ -233,7 +233,7 @@ class Reconciler
         }
 
         $line->setEntry(null)->setStatus(BankLineStatus::UNMATCHED);
-        $this->entityManager->flush();
+        $this->unitOfWork->flush();
 
         $this->dispatcher?->dispatch(new BankLineUnreconciled($line, $entry, $reversal));
     }

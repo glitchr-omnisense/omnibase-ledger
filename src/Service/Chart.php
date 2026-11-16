@@ -11,7 +11,7 @@ use Base\Ledger\Enum\TaxKind;
 use Base\Ledger\Repository\AccountRepository;
 use Base\Ledger\Repository\JournalRepository;
 use Base\Ledger\Repository\TaxRepository;
-use Doctrine\ORM\EntityManagerInterface;
+use Base\Contract\UnitOfWork;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 /**
@@ -24,7 +24,7 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 class Chart
 {
     public function __construct(
-        private readonly EntityManagerInterface $entityManager,
+        private readonly UnitOfWork $unitOfWork,
         private readonly AccountRepository $accounts,
         private readonly JournalRepository $journals,
         #[Autowire('%ledger.chart%')] private readonly string $defaultChart = 'sci',
@@ -44,13 +44,13 @@ class Chart
         foreach ($definition['accounts'] as $number => [$label, $type]) {
             $number = Account::normalize((string) $number);
             if (!isset($existing[$number])) {
-                $this->entityManager->persist($existing[$number] = new Account($book, $number, $label, $type));
+                $this->unitOfWork->persist($existing[$number] = new Account($book, $number, $label, $type));
             }
         }
 
         foreach ($definition['journals'] as $code => $label) {
             if (null === $this->journals->findOneByCode($book, $code)) {
-                $this->entityManager->persist(new Journal($book, $code, $label));
+                $this->unitOfWork->persist(new Journal($book, $code, $label));
             }
         }
 
@@ -61,12 +61,12 @@ class Chart
         foreach ($definition['taxes'] ?? [] as $code => [$label, $rate, $kind, $account, $deductible]) {
             $code = Tax::normalize((string) $code);
             if (!isset($codes[$code])) {
-                $this->entityManager->persist(new Tax($book, $code, $label, $rate, $kind, null === $account ? null : ($existing[Account::normalize($account)] ?? null), null === $deductible ? null : ($existing[Account::normalize($deductible)] ?? null)));
+                $this->unitOfWork->persist(new Tax($book, $code, $label, $rate, $kind, null === $account ? null : ($existing[Account::normalize($account)] ?? null), null === $deductible ? null : ($existing[Account::normalize($deductible)] ?? null)));
                 $codes[$code] = true;
             }
         }
 
-        $this->entityManager->flush();
+        $this->unitOfWork->flush();
     }
 
     /**

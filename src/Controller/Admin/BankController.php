@@ -88,7 +88,7 @@ class BankController extends AbstractLedgerPageController
             try {
                 $connection = $this->connections->start($book, $gateway, $this->generateUrl('admin', [], UrlGeneratorInterface::ABSOLUTE_URL), $name)['connection'];
                 $account = $this->connections->attach($connection, 'files-'.bin2hex(random_bytes(6)), $name, $iban, $book->getCurrency());
-                $this->entityManager->flush();
+                $this->unitOfWork->flush();
             } catch (LedgerException $e) {
                 $this->addFlash('error', $e->getMessage());
 

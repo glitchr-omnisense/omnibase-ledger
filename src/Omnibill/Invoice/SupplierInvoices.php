@@ -18,7 +18,7 @@ use Base\Ledger\Omnibill\Repository\SupplierInvoiceRepository;
 use Base\Ledger\Repository\BookRepository;
 use Base\Ledger\Service\Parties;
 use Base\Ledger\Service\Posting;
-use Doctrine\ORM\EntityManagerInterface;
+use Base\Contract\UnitOfWork;
 use Omnibill\Exception\InvalidConfigException;
 use Omnibill\Exception\InvalidKeyException;
 use Omnibill\Exception\NotSupportedException;
@@ -80,7 +80,7 @@ class SupplierInvoices
     public const SEARCH_DELAY = 'PT10M';
 
     public function __construct(
-        private readonly EntityManagerInterface $entityManager,
+        private readonly UnitOfWork $unitOfWork,
         private readonly SupplierInvoiceRepository $invoices,
         private readonly InvoiceInboxRepository $inboxes,
         private readonly BookRepository $books,
@@ -143,7 +143,7 @@ class SupplierInvoices
             $inbox = $this->inboxes->findOneByGateway($gateway);
             if (null === $inbox) {
                 $inbox = new InvoiceInbox($gateway);
-                $this->entityManager->persist($inbox);
+                $this->unitOfWork->persist($inbox);
             }
             try {
                 $channel = $this->registry->get($gateway);
@@ -169,14 +169,14 @@ class SupplierInvoices
                         };
                     }
                     $inbox->advance($box->cursor);
-                    $this->entityManager->flush();
+                    $this->unitOfWork->flush();
                     if (!$box->more) {
                         break;
                     }
                 }
             } catch (OmnibillException|LedgerException $e) {
                 $inbox->fail($e->getMessage());
-                $this->entityManager->flush();
+                $this->unitOfWork->flush();
                 $report['error'] = $e->getMessage();
             }
         } finally {
@@ -236,8 +236,8 @@ class SupplierInvoices
             }
 
             $invoice->setFile($this->file($invoice, $content));
-            $this->entityManager->persist($invoice);
-            $this->entityManager->flush();
+            $this->unitOfWork->persist($invoice);
+            $this->unitOfWork->flush();
         } finally {
             $lock?->release();
         }
@@ -273,7 +273,7 @@ class SupplierInvoices
         $draft = $this->proposer->draft($invoice, (string) $invoice->getAccount(), $party, 'supplier-invoice:'.($invoice->getId() ?? $invoice->getSha256()), $date);
         $entry = $this->posting->post($draft);
         $invoice->book($entry, $by);
-        $this->entityManager->flush();
+        $this->unitOfWork->flush();
         $this->declare($invoice, LifecycleStatus::APPROVED);
 
         return $entry;
@@ -289,7 +289,7 @@ class SupplierInvoices
             throw new LedgerException('A refusal says why.');
         }
         $invoice->refuse(trim($reason), $by);
-        $this->entityManager->flush();
+        $this->unitOfWork->flush();
         $this->declare($invoice, LifecycleStatus::REFUSED, trim($reason));
     }
 
@@ -300,7 +300,7 @@ class SupplierInvoices
             return;
         }
         $invoice->markPaid($on);
-        $this->entityManager->flush();
+        $this->unitOfWork->flush();
         $amount = null === $invoice->getTotalIncl() ? null : self::decimal($invoice->getTotalIncl());
         $amounts = [];
         foreach ($invoice->getVat() as $rate) {
@@ -323,13 +323,13 @@ class SupplierInvoices
         }
         if ($taken) {
             $invoice->statusSent($index, null);
-            $this->entityManager->flush();
+            $this->unitOfWork->flush();
 
             return true;
         }
         $invoice->statusRetried($index);
         $sent = $this->send($invoice, $index);
-        $this->entityManager->flush();
+        $this->unitOfWork->flush();
 
         return $sent;
     }
@@ -379,7 +379,7 @@ class SupplierInvoices
                 $sent += (int) $this->send($invoice, $index);
             }
         }
-        $this->entityManager->flush();
+        $this->unitOfWork->flush();
 
         return $sent;
     }
@@ -437,7 +437,7 @@ class SupplierInvoices
         }
         $index = $invoice->declare($status->value, $reason, $amount, $amounts);
         $this->send($invoice, $index);
-        $this->entityManager->flush();
+        $this->unitOfWork->flush();
     }
 
     /**

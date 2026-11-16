@@ -5,7 +5,7 @@ namespace Base\Ledger\Entity;
 use Base\Ledger\Repository\EntryLineRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
-use Doctrine\ORM\Mapping as ORM;
+use Base\Mapping as ORM;
 
 /**
  * One line of an entry: an amount on the debit or the credit side of an

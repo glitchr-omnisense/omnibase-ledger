@@ -4,15 +4,19 @@ namespace Base\Ledger\Repository;
 
 use Base\Ledger\Entity\Book;
 use Base\Ledger\Entity\Entry;
-use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
-use Doctrine\Persistence\ManagerRegistry;
+use Base\Database\Repository\Finder\Criterion;
+use Base\Database\Repository\Finder\Group;
+use Base\Database\Repository\Finder\Key;
+use Base\Database\Repository\Finder\Parser;
+use Base\Database\Repository\ServiceEntityRepository;
+use Base\Database\Repository\Finders;
 
 /** @extends ServiceEntityRepository<Entry> */
 class EntryRepository extends ServiceEntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
+    public function __construct(Finders $finders)
     {
-        parent::__construct($registry, Entry::class);
+        parent::__construct($finders, Entry::class);
     }
 
     public function findOneBySource(Book $book, string $source): ?Entry
@@ -23,11 +27,10 @@ class EntryRepository extends ServiceEntityRepository
     /** The highest number given with this prefix ("2026-"): numbers are zero-padded, so the greatest string is the last. */
     public function lastNumber(Book $book, string $prefix): ?string
     {
-        $number = $this->createQueryBuilder('e')
-            ->select('MAX(e.number)')
-            ->andWhere('e.book = :book')->setParameter('book', $book)
-            ->andWhere('e.number LIKE :prefix')->setParameter('prefix', addcslashes($prefix, '%_').'%')
-            ->getQuery()->getSingleScalarResult();
+        $number = $this->maxOfNumberBy([
+            'book' => Key::of($book),
+            Group::of(Parser::SEPARATOR_AND, Criterion::of('number', $prefix, Parser::OPTION_STARTING_WITH)),
+        ]);
 
         return null === $number ? null : (string) $number;
     }
@@ -39,27 +42,24 @@ class EntryRepository extends ServiceEntityRepository
     }
 
     /**
-     * The book's entries dated in [$from, $to], with their lines, in the
-     * order the FEC lists them (date, then number).
+     * The book's entries dated in [$from, $to], in the order the FEC lists
+     * them (date, then number); their lines load with them, by id (Entry::$lines' order).
      *
      * @return list<Entry>
      */
     public function forPeriod(Book $book, \DateTimeImmutable $from, \DateTimeImmutable $to, bool $validatedOnly = true): array
     {
-        $qb = $this->createQueryBuilder('e')
-            ->leftJoin('e.lines', 'l')->addSelect('l')
-            ->leftJoin('l.account', 'a')->addSelect('a')
-            ->leftJoin('l.party', 'p')->addSelect('p')
-            ->join('e.journal', 'j')->addSelect('j')
-            ->andWhere('e.book = :book')->setParameter('book', $book)
-            ->andWhere('e.date >= :from AND e.date <= :to')
-            ->setParameter('from', $from->setTime(0, 0), 'date_immutable')
-            ->setParameter('to', $to->setTime(0, 0), 'date_immutable')
-            ->orderBy('e.date', 'ASC')->addOrderBy('e.number', 'ASC')->addOrderBy('e.id', 'ASC')->addOrderBy('l.id', 'ASC');
+        $criteria = [
+            'book' => Key::of($book),
+            Group::of(Parser::SEPARATOR_AND,
+                Criterion::of('date', $from->setTime(0, 0), Parser::OPTION_GREATER_EQUAL),
+                Criterion::of('date', $to->setTime(0, 0), Parser::OPTION_LOWER_EQUAL),
+            ),
+        ];
         if ($validatedOnly) {
-            $qb->andWhere('e.validatedAt IS NOT NULL');
+            $criteria[] = Group::of(Parser::SEPARATOR_AND, Criterion::of('validatedAt', null, Parser::OPTION_NOT_NULL));
         }
 
-        return $qb->getQuery()->getResult();
+        return $this->findBy($criteria, ['date' => 'ASC', 'number' => 'ASC', 'id' => 'ASC']);
     }
 }

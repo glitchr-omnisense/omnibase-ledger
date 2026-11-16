@@ -14,7 +14,7 @@ use Base\Field\TextField;
 use Base\Ledger\Controller\Admin\LedgerAdminTrait;
 use Base\Ledger\Entity\Entry;
 use Base\Ledger\Entity\EntryLine;
-use Omnibridge\Persistence\UnitOfWork;
+use Base\Contract\UnitOfWork;
 
 /**
  * The entries, with their lines. They are posted by the application and the

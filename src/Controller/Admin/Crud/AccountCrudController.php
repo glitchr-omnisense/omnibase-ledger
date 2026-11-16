@@ -62,6 +62,6 @@ class AccountCrudController extends AbstractCrudController
 
     public function isDeletable(object $entity): bool
     {
-        return null === $this->entityManager->getRepository(EntryLine::class)->findOneBy(['account' => $entity]);
+        return null === $this->repositories->of(EntryLine::class)->findOneBy(['account' => $entity]);
     }
 }

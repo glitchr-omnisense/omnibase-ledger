@@ -63,7 +63,7 @@ class SyncTest extends InMemoryLedger
         $factory->method('getName')->willReturn('powens');
         $factory->method('create')->willReturn($gateway);
 
-        return new Connections($this->entityManager(), new StateCipher('s'), $this->accountRepository(), $this->journalRepository(),
+        return new Connections($this->unitOfWork(), new StateCipher('s'), $this->accountRepository(), $this->journalRepository(),
             $this->createStub(BankAccountRepository::class), $this->createStub(BankConnectionRepository::class),
             new Registry([$factory], ['powens' => ['factory' => 'powens']]));
     }
@@ -81,7 +81,7 @@ class SyncTest extends InMemoryLedger
         $connections = $this->connections();
         $account = $this->syncedAccount($connections, Consent::active());
         $account->setLastSyncedAt(new \DateTimeImmutable('2026-09-20 14:00'));
-        $sync = new Sync($this->entityManager(), $connections, new Importer($this->entityManager(), $this->bankLineRepository()));
+        $sync = new Sync($this->unitOfWork(), $connections, new Importer($this->unitOfWork(), $this->bankLineRepository()));
 
         self::assertSame(2, $sync->sync($account));
         self::assertSame('2026-09-15 00:00', $this->since->format('Y-m-d H:i'));
@@ -96,7 +96,7 @@ class SyncTest extends InMemoryLedger
     {
         $connections = $this->connections();
         $account = $this->syncedAccount($connections, Consent::needsRenewal());
-        $sync = new Sync($this->entityManager(), $connections, new Importer($this->entityManager(), $this->bankLineRepository()));
+        $sync = new Sync($this->unitOfWork(), $connections, new Importer($this->unitOfWork(), $this->bankLineRepository()));
 
         try {
             $sync->sync($account);
@@ -113,7 +113,7 @@ class SyncTest extends InMemoryLedger
         $connections = $this->connections();
         $account = $this->syncedAccount($connections, Consent::active());
         $this->failure = new \RuntimeException('HTTP 401: SCA required');
-        $sync = new Sync($this->entityManager(), $connections, new Importer($this->entityManager(), $this->bankLineRepository()));
+        $sync = new Sync($this->unitOfWork(), $connections, new Importer($this->unitOfWork(), $this->bankLineRepository()));
 
         try {
             $sync->sync($account);
@@ -129,7 +129,7 @@ class SyncTest extends InMemoryLedger
     {
         $connections = $this->connections();
         $account = $this->syncedAccount($connections, Consent::active());
-        $sync = new Sync($this->entityManager(), $connections, new Importer($this->entityManager(), $this->bankLineRepository()));
+        $sync = new Sync($this->unitOfWork(), $connections, new Importer($this->unitOfWork(), $this->bankLineRepository()));
 
         $sync->sync($account);
         self::assertSame(AccountKind::CHECKING, $account->getKind());

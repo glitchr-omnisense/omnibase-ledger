@@ -5,15 +5,19 @@ namespace Base\Ledger\Repository;
 use Base\Ledger\Entity\BankAccount;
 use Base\Ledger\Entity\BankLine;
 use Base\Ledger\Enum\BankLineStatus;
-use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
-use Doctrine\Persistence\ManagerRegistry;
+use Base\Database\Repository\Finder\Criterion;
+use Base\Database\Repository\Finder\Group;
+use Base\Database\Repository\Finder\Key;
+use Base\Database\Repository\Finder\Parser;
+use Base\Database\Repository\ServiceEntityRepository;
+use Base\Database\Repository\Finders;
 
 /** @extends ServiceEntityRepository<BankLine> */
 class BankLineRepository extends ServiceEntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
+    public function __construct(Finders $finders)
     {
-        parent::__construct($registry, BankLine::class);
+        parent::__construct($finders, BankLine::class);
     }
 
     public function findOneByExternalId(BankAccount $account, string $externalId): ?BankLine
@@ -36,30 +40,27 @@ class BankLineRepository extends ServiceEntityRepository
     }
 
     /**
-     * A bank account's lines as plain values, oldest first, for Bank\Aggregates (no entity hydrated).
+     * A bank account's lines as plain values, oldest first, for Bank\Aggregates (read as entities
+     * by the finder language, which selects no columns, then turned into values).
      *
      * @return list<array{bookedOn: \DateTimeImmutable, amount: int, category: ?string, counterpartyName: ?string, counterpartyIban: ?string, label: string}>
      */
     public function movements(BankAccount $account): array
     {
-        $rows = $this->createQueryBuilder('l')
-            ->select('l.bookedOn AS bookedOn, l.amount AS amount, l.category AS category, l.counterpartyName AS counterpartyName, l.counterpartyIban AS counterpartyIban, l.label AS label')
-            ->andWhere('l.bankAccount = :account')->setParameter('account', $account)
-            ->orderBy('l.bookedOn', 'ASC')->addOrderBy('l.id', 'ASC')
-            ->getQuery()->getArrayResult();
-
-        return array_map(static fn (array $row) => [
-            'bookedOn' => $row['bookedOn'] instanceof \DateTimeImmutable ? $row['bookedOn'] : new \DateTimeImmutable((string) $row['bookedOn']),
-            'amount' => (int) $row['amount'],
-            'category' => $row['category'],
-            'counterpartyName' => $row['counterpartyName'],
-            'counterpartyIban' => $row['counterpartyIban'],
-            'label' => (string) $row['label'],
-        ], $rows);
+        return array_map(static fn (BankLine $line) => [
+            'bookedOn' => $line->getBookedOn(),
+            'amount' => (int) $line->getAmount(),
+            'category' => $line->getCategory(),
+            'counterpartyName' => $line->getCounterpartyName(),
+            'counterpartyIban' => $line->getCounterpartyIban(),
+            'label' => (string) $line->getLabel(),
+        ], $this->findBy(['bankAccount' => Key::of($account)], ['bookedOn' => 'ASC', 'id' => 'ASC']));
     }
 
     /**
-     * The largest movements of $accounts from $from to $to, by amount whatever its direction.
+     * The largest movements of $accounts from $from to $to, by amount whatever its direction: the
+     * largest credits and the largest debits read apart (the finder language orders by no
+     * expression such as ABS()), merged by size, then the latest booked.
      *
      * @param list<BankAccount> $accounts
      *
@@ -67,17 +68,16 @@ class BankLineRepository extends ServiceEntityRepository
      */
     public function largest(array $accounts, \DateTimeImmutable $from, \DateTimeImmutable $to, int $limit = 8): array
     {
-        if ([] === $accounts) {
+        if ([] === $accounts || $limit < 1) {
             return [];
         }
+        $criteria = ['bankAccount' => Key::of(array_values($accounts)), $this->booked($from->setTime(0, 0), $to->setTime(0, 0))];
+        $credits = $this->findBy($criteria + [Group::of(Parser::SEPARATOR_AND, Criterion::of('amount', 0, Parser::OPTION_GREATER_EQUAL))], ['amount' => 'DESC', 'bookedOn' => 'DESC'], $limit);
+        $debits = $this->findBy($criteria + [Group::of(Parser::SEPARATOR_AND, Criterion::of('amount', 0, Parser::OPTION_LOWER))], ['amount' => 'ASC', 'bookedOn' => 'DESC'], $limit);
+        $lines = [...$credits, ...$debits];
+        usort($lines, static fn (BankLine $a, BankLine $b) => [abs($b->getAmount()), $b->getBookedOn()] <=> [abs($a->getAmount()), $a->getBookedOn()]);
 
-        return $this->createQueryBuilder('l')
-            ->addSelect('ABS(l.amount) AS HIDDEN size')
-            ->andWhere('l.bankAccount IN (:accounts)')->setParameter('accounts', $accounts)
-            ->andWhere('l.bookedOn >= :from AND l.bookedOn <= :to')->setParameter('from', $from->setTime(0, 0))->setParameter('to', $to->setTime(0, 0))
-            ->orderBy('size', 'DESC')->addOrderBy('l.bookedOn', 'DESC')
-            ->setMaxResults($limit)
-            ->getQuery()->getResult();
+        return \array_slice($lines, 0, $limit);
     }
 
     /**
@@ -97,15 +97,13 @@ class BankLineRepository extends ServiceEntityRepository
             return [];
         }
 
-        return $this->reviewQuery($accounts, $state, $month, $search)
-            ->orderBy('l.bookedOn', 'DESC')->addOrderBy('l.id', 'DESC')
-            ->setFirstResult($offset)->setMaxResults($limit)
-            ->getQuery()->getResult();
+        return $this->findBy($this->reviewCriteria($accounts, $state, $month, $search), ['bookedOn' => 'DESC', 'id' => 'DESC'], $limit, $offset);
     }
 
     /**
      * How many lines of $accounts each state counts, in the month and the
-     * search given: todo, reconciled, ignored, missing, all.
+     * search given: todo, reconciled, ignored, missing, all (a count per
+     * status - the finder language has no GROUP BY).
      *
      * @param list<BankAccount> $accounts
      *
@@ -117,17 +115,13 @@ class BankLineRepository extends ServiceEntityRepository
         if ([] === $accounts) {
             return $counts;
         }
-        $rows = $this->reviewQuery($accounts, null, $month, $search)
-            ->select('l.status AS status, COUNT(l.id) AS n, SUM(CASE WHEN l.receiptMissing = true THEN 1 ELSE 0 END) AS missing')
-            ->groupBy('l.status')
-            ->getQuery()->getArrayResult();
-        foreach ($rows as $row) {
-            $status = $row['status'] instanceof BankLineStatus ? $row['status'] : BankLineStatus::from((string) $row['status']);
-            $key = $status->isPending() ? 'todo' : $status->value;
-            $counts[$key] += (int) $row['n'];
-            $counts['missing'] += (int) $row['missing'];
-            $counts['all'] += (int) $row['n'];
+        $criteria = $this->reviewCriteria($accounts, null, $month, $search);
+        foreach (BankLineStatus::cases() as $status) {
+            $n = $this->count($criteria + ['status' => $status]);
+            $counts[$status->isPending() ? 'todo' : $status->value] += $n;
+            $counts['all'] += $n;
         }
+        $counts['missing'] = $this->count($criteria + ['receiptMissing' => true]);
 
         return $counts;
     }
@@ -144,12 +138,10 @@ class BankLineRepository extends ServiceEntityRepository
         if ([] === $accounts) {
             return [null, null];
         }
-        $row = $this->createQueryBuilder('l')->select('MIN(l.bookedOn) AS first, MAX(l.bookedOn) AS last')
-            ->andWhere('l.bankAccount IN (:accounts)')->setParameter('accounts', $accounts)
-            ->getQuery()->getSingleResult();
+        $criteria = ['bankAccount' => Key::of(array_values($accounts))];
         $date = static fn ($value) => null === $value ? null : ($value instanceof \DateTimeImmutable ? $value : new \DateTimeImmutable((string) $value));
 
-        return [$date($row['first'] ?? null), $date($row['last'] ?? null)];
+        return [$date($this->minOfBookedOnBy($criteria)), $date($this->maxOfBookedOnBy($criteria))];
     }
 
     /**
@@ -159,54 +151,67 @@ class BankLineRepository extends ServiceEntityRepository
      */
     public function ids(BankAccount $account): array
     {
-        return array_map('intval', array_column($this->createQueryBuilder('l')->select('l.id')
-            ->andWhere('l.bankAccount = :account')->setParameter('account', $account)
-            ->getQuery()->getScalarResult(), 'id'));
+        return array_map(static fn (BankLine $line) => (int) $line->getId(), $this->findBy(['bankAccount' => Key::of($account)]));
     }
 
-    /** @param list<BankAccount> $accounts */
-    private function reviewQuery(array $accounts, ?string $state, ?string $month, ?string $search): \Doctrine\ORM\QueryBuilder
+    /**
+     * review()'s and reviewCounts()'s conditions.
+     *
+     * @param list<BankAccount> $accounts
+     *
+     * @return array<int|string, mixed>
+     */
+    private function reviewCriteria(array $accounts, ?string $state, ?string $month, ?string $search): array
     {
-        $qb = $this->createQueryBuilder('l')
-            ->andWhere('l.bankAccount IN (:accounts)')->setParameter('accounts', $accounts);
+        $criteria = ['bankAccount' => Key::of(array_values($accounts))];
         match ($state) {
-            'todo' => $qb->andWhere('l.status IN (:states)')->setParameter('states', [BankLineStatus::UNMATCHED, BankLineStatus::SUGGESTED]),
-            'reconciled' => $qb->andWhere('l.status = :state')->setParameter('state', BankLineStatus::RECONCILED),
-            'ignored' => $qb->andWhere('l.status = :state')->setParameter('state', BankLineStatus::IGNORED),
-            'missing' => $qb->andWhere('l.receiptMissing = true'),
+            'todo' => $criteria['status'] = [BankLineStatus::UNMATCHED, BankLineStatus::SUGGESTED],
+            'reconciled' => $criteria['status'] = BankLineStatus::RECONCILED,
+            'ignored' => $criteria['status'] = BankLineStatus::IGNORED,
+            'missing' => $criteria['receiptMissing'] = true,
             default => null,
         };
         if (null !== $month && preg_match('/^(\d{4})-(\d{2})$/', $month)) {
             $first = new \DateTimeImmutable($month.'-01');
-            $qb->andWhere('l.bookedOn >= :from AND l.bookedOn <= :to')->setParameter('from', $first)->setParameter('to', $first->modify('last day of this month'));
+            $criteria[] = $this->booked($first, $first->modify('last day of this month'));
         }
         $search = trim((string) $search);
         if ('' !== $search) {
             if (preg_match('/^-?\s*(\d{1,9})(?:[.,](\d{1,2}))?\s*€?$/u', $search, $m)) {
                 $minor = (int) $m[1] * 100 + (int) str_pad($m[2] ?? '0', 2, '0');
-                $qb->andWhere('l.amount = :plus OR l.amount = :minus')->setParameter('plus', $minor)->setParameter('minus', -$minor);
+                $criteria['amount'] = [$minor, -$minor];
             } else {
-                foreach (array_slice(preg_split('/\s+/', $search), 0, 5) as $i => $word) {
-                    $qb->andWhere(sprintf('l.label LIKE :w%1$d OR l.counterpartyName LIKE :w%1$d OR l.reference LIKE :w%1$d', $i))
-                        ->setParameter('w'.$i, '%'.addcslashes($word, '%_').'%');
+                foreach (\array_slice(preg_split('/\s+/', $search), 0, 5) as $word) {
+                    $like = '%'.addcslashes($word, '%_').'%';
+                    $criteria[] = Group::of(Parser::SEPARATOR_OR,
+                        Criterion::of('label', $like, Parser::OPTION_PARTIAL),
+                        Criterion::of('counterpartyName', $like, Parser::OPTION_PARTIAL),
+                        Criterion::of('reference', $like, Parser::OPTION_PARTIAL),
+                    );
                 }
             }
         }
 
-        return $qb;
+        return $criteria;
     }
 
-    /** @return array<string, int> status value => count, for one bank account */
+    /** l.bookedOn >= :from AND l.bookedOn <= :to */
+    private function booked(\DateTimeImmutable $from, \DateTimeImmutable $to): Group
+    {
+        return Group::of(Parser::SEPARATOR_AND,
+            Criterion::of('bookedOn', $from, Parser::OPTION_GREATER_EQUAL),
+            Criterion::of('bookedOn', $to, Parser::OPTION_LOWER_EQUAL),
+        );
+    }
+
+    /** @return array<string, int> status value => count, for one bank account (the statuses it has lines in) */
     public function countByStatus(BankAccount $account): array
     {
-        $rows = $this->createQueryBuilder('l')->select('l.status AS status, COUNT(l.id) AS n')
-            ->andWhere('l.bankAccount = :account')->setParameter('account', $account)
-            ->groupBy('l.status')
-            ->getQuery()->getArrayResult();
-
         $counts = [];
-        foreach ($rows as $row) {
-            $counts[$row['status'] instanceof BankLineStatus ? $row['status']->value : (string) $row['status']] = (int) $row['n'];
+        foreach (BankLineStatus::cases() as $status) {
+            if (0 < $n = $this->count(['bankAccount' => Key::of($account), 'status' => $status])) {
+                $counts[$status->value] = $n;
+            }
         }
 
         return $counts;

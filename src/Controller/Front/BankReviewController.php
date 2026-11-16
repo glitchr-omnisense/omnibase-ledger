@@ -20,7 +20,8 @@ use Base\Ledger\Repository\BookRepository;
 use Base\Ledger\Repository\PartyRepository;
 use Base\Ledger\Repository\ReconciliationRuleRepository;
 use Base\Ledger\Security\Voter\LedgerVoter;
-use Doctrine\ORM\EntityManagerInterface;
+use Base\Contract\UnitOfWork;
+use Base\Database\Repository\Repositories;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -52,7 +53,8 @@ class BankReviewController extends AbstractController
     private const TOKEN = 'ledger_review';
 
     public function __construct(
-        private readonly EntityManagerInterface $entityManager,
+        private readonly UnitOfWork $unitOfWork,
+        private readonly Repositories $repositories,
         private readonly Desk $desk,
         private readonly Categories $categories,
         private readonly Receipts $receipts,
@@ -283,7 +285,7 @@ class BankReviewController extends AbstractController
     #[Route('/rules/{id}/undo', name: 'ledger_front_review_rule_undo', requirements: ['id' => '\d+'], methods: ['POST'])]
     public function undoRule(Request $request, int $id): JsonResponse
     {
-        $rule = $this->entityManager->find(ReconciliationRule::class, $id) ?? throw $this->createNotFoundException();
+        $rule = $this->repositories->of(ReconciliationRule::class)->find($id) ?? throw $this->createNotFoundException();
         $this->deny(LedgerVoter::MANAGE, $rule);
         $this->assertToken($request);
         $book = $rule->getBook();
@@ -380,14 +382,14 @@ class BankReviewController extends AbstractController
     #[Route('/rules/{id}', name: 'ledger_front_rule_edit', requirements: ['id' => '\d+'], methods: ['POST'])]
     public function editRule(Request $request, int $id): Response
     {
-        $rule = $this->entityManager->find(ReconciliationRule::class, $id) ?? throw $this->createNotFoundException();
+        $rule = $this->repositories->of(ReconciliationRule::class)->find($id) ?? throw $this->createNotFoundException();
         $this->deny(LedgerVoter::MANAGE, $rule);
         $this->assertToken($request);
         $book = $rule->getBook();
 
         if ($request->request->getBoolean('delete')) {
-            $this->entityManager->remove($rule);
-            $this->entityManager->flush();
+            $this->unitOfWork->remove($rule);
+            $this->unitOfWork->flush();
             $this->addFlash('success', $this->translator->trans('review.rules.deleted', ['name' => $rule->getName()], 'ledger'));
 
             return $this->redirectToRoute('ledger_front_rules', ['book' => $book->getId()]);
@@ -409,7 +411,7 @@ class BankReviewController extends AbstractController
             // A rule of one account: its tax code, if any, is its only part's.
             $rule->setSplit('' === $tax ? null : [['account' => $rule->getAccount()->getNumber(), 'rest' => true, 'tax' => strtoupper($tax)]]);
         }
-        $this->entityManager->flush();
+        $this->unitOfWork->flush();
         $this->addFlash('success', $this->translator->trans('review.rules.saved', ['name' => $rule->getName()], 'ledger'));
 
         return $this->redirectToRoute('ledger_front_rules', ['book' => $book->getId(), '_fragment' => 'rule-'.$rule->getId()]);
@@ -572,7 +574,7 @@ class BankReviewController extends AbstractController
 
     private function line(int $id, string $attribute, ?Request $request = null): BankLine
     {
-        $line = $this->entityManager->find(BankLine::class, $id) ?? throw $this->createNotFoundException();
+        $line = $this->repositories->of(BankLine::class)->find($id) ?? throw $this->createNotFoundException();
         $this->deny($attribute, $line);
         if (null !== $request) {
             $this->assertToken($request);
@@ -587,7 +589,7 @@ class BankReviewController extends AbstractController
         if ($id <= 0) {
             return null;
         }
-        $party = $this->entityManager->find(Party::class, $id);
+        $party = $this->repositories->of(Party::class)->find($id);
         if (null === $party || $party->getBook() !== $book) {
             throw $this->createAccessDeniedException();
         }
@@ -606,7 +608,7 @@ class BankReviewController extends AbstractController
     /** @return list<BankLine> */
     private function found(array $ids): array
     {
-        return array_values(array_filter(array_map(fn (int $id) => $this->entityManager->find(BankLine::class, $id), $ids)));
+        return array_values(array_filter(array_map(fn (int $id) => $this->repositories->of(BankLine::class)->find($id), $ids)));
     }
 
     /** @return list<int> */

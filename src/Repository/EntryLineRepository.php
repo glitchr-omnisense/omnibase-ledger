@@ -6,17 +6,23 @@ use Base\Ledger\Entity\Account;
 use Base\Ledger\Entity\Book;
 use Base\Ledger\Entity\EntryLine;
 use Base\Ledger\Entity\EntryLineDimension;
+use Base\Ledger\Enum\AccountType;
+use Base\Ledger\Enum\TaxKind;
 use Base\Ledger\Entity\Party;
-use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
-use Doctrine\ORM\QueryBuilder;
-use Doctrine\Persistence\ManagerRegistry;
+use Base\Database\Repository\Finder\Aggregate;
+use Base\Database\Repository\Finder\Criterion;
+use Base\Database\Repository\Finder\Group;
+use Base\Database\Repository\Finder\Key;
+use Base\Database\Repository\Finder\Parser;
+use Base\Database\Repository\ServiceEntityRepository;
+use Base\Database\Repository\Finders;
 
 /** @extends ServiceEntityRepository<EntryLine> */
 class EntryLineRepository extends ServiceEntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
+    public function __construct(Finders $finders)
     {
-        parent::__construct($registry, EntryLine::class);
+        parent::__construct($finders, EntryLine::class);
     }
 
     /**
@@ -28,17 +34,15 @@ class EntryLineRepository extends ServiceEntityRepository
      */
     public function openItems(Book $book, ?Party $party = null, ?string $accountPrefix = null): array
     {
-        $qb = $this->lines($book)
-            ->andWhere('l.letter IS NULL')
-            ->orderBy('e.date', 'ASC')->addOrderBy('l.id', 'ASC');
+        $criteria = $this->lines($book) + [Group::of(Parser::SEPARATOR_AND, Criterion::of('letter', null, Parser::OPTION_NULL))];
         if (null !== $party) {
-            $qb->andWhere('l.party = :party')->setParameter('party', $party);
+            $criteria['party'] = Key::of($party);
         }
         if (null !== $accountPrefix && '' !== $accountPrefix) {
-            $qb->andWhere('a.number LIKE :prefix')->setParameter('prefix', addcslashes(Account::normalize($accountPrefix), '%_').'%');
+            $criteria[] = $this->under($accountPrefix);
         }
 
-        return $qb->getQuery()->getResult();
+        return $this->findBy($criteria, ['entry.date' => 'ASC', 'id' => 'ASC']);
     }
 
     /**
@@ -50,16 +54,15 @@ class EntryLineRepository extends ServiceEntityRepository
      */
     public function bankUsage(Book $book, \DateTimeImmutable $since): array
     {
-        $rows = $this->lines($book)
-            ->select('a.number AS number, COUNT(l.id) AS n')
-            ->andWhere('e.source LIKE :bank AND e.source NOT LIKE :undo AND e.reversalOf IS NULL')->setParameter('bank', 'bank:%')->setParameter('undo', '%:undo')
-            ->andWhere('e.date >= :since')->setParameter('since', $since->setTime(0, 0))
-            ->groupBy('a.number')
-            ->orderBy('n', 'DESC')
-            ->getQuery()->getArrayResult();
-
         $usage = [];
-        foreach ($rows as $row) {
+        foreach ($this->findValuesBy(['number' => 'account.number', 'n' => Aggregate::count()], array_merge($this->lines($book), [
+            'entry.reversalOf' => null,
+            Group::of(Parser::SEPARATOR_AND,
+                Criterion::of('entry.source', 'bank:', Parser::OPTION_STARTING_WITH),
+                Criterion::of('entry.source', ':undo', Parser::OPTION_NOT_ENDING_WITH),
+                Criterion::of('entry.date', $since->setTime(0, 0), Parser::OPTION_GREATER_EQUAL),
+            ),
+        ]), ['n' => 'DESC']) as $row) {
             $usage[(string) $row['number']] = (int) $row['n'];
         }
 
@@ -77,27 +80,18 @@ class EntryLineRepository extends ServiceEntityRepository
      */
     public function accountsWith(Book $book, Party $party, array $prefixes = ['6', '2'], int $limit = 5): array
     {
-        $entries = $this->getEntityManager()->createQueryBuilder()
-            ->select('IDENTITY(pl.entry)')->from(EntryLine::class, 'pl')
-            ->andWhere('pl.party = :party');
-        $qb = $this->lines($book)
-            ->select('a.number AS number, COUNT(l.id) AS n')
-            ->andWhere('e.id IN ('.$entries->getDQL().')')->setParameter('party', $party)
-            ->andWhere('e.reversalOf IS NULL')
-            ->groupBy('a.number')
-            ->orderBy('n', 'DESC')
-            ->setMaxResults($limit);
-        $or = [];
-        foreach (array_values($prefixes) as $i => $prefix) {
-            $or[] = 'a.number LIKE :prefix'.$i;
-            $qb->setParameter('prefix'.$i, addcslashes(Account::normalize($prefix), '%_').'%');
+        // The entries with a line for the party, then their other lines.
+        $entries = array_values(array_filter(array_column($this->findValuesBy(['entry' => 'entry'], ['party' => $party], distinct: true), 'entry')));
+        if ([] === $entries) {
+            return [];
         }
-        if ([] !== $or) {
-            $qb->andWhere(implode(' OR ', $or));
+        $criteria = array_merge($this->lines($book), ['entry' => Key::of($entries), 'entry.reversalOf' => null]);
+        if ([] !== $prefixes) {
+            $criteria[] = Group::of(Parser::SEPARATOR_OR, ...array_map(static fn (string $prefix) => Criterion::of('account.number', Account::normalize($prefix), Parser::OPTION_STARTING_WITH), array_values($prefixes)));
         }
 
         $accounts = [];
-        foreach ($qb->getQuery()->getArrayResult() as $row) {
+        foreach ($this->findValuesBy(['number' => 'account.number', 'n' => Aggregate::count()], $criteria, ['n' => 'DESC'], $limit) as $row) {
             $accounts[(string) $row['number']] = (int) $row['n'];
         }
 
@@ -107,20 +101,17 @@ class EntryLineRepository extends ServiceEntityRepository
     /** @return list<EntryLine> */
     public function findByLetter(Book $book, string $letter): array
     {
-        return $this->lines($book)->andWhere('l.letter = :letter')->setParameter('letter', $letter)
-            ->orderBy('l.id', 'ASC')->getQuery()->getResult();
+        return $this->findBy($this->lines($book) + ['letter' => $letter], ['id' => 'ASC']);
     }
 
     /** The last letter given in the book: letters run AAA, AAB... ZZZ, AAAA. */
     public function lastLetter(Book $book): ?string
     {
-        $row = $this->lines($book)->select('l.letter, LENGTH(l.letter) AS HIDDEN size')
-            ->andWhere('l.letter IS NOT NULL')
-            ->orderBy('size', 'DESC')->addOrderBy('l.letter', 'DESC')
-            ->setMaxResults(1)
-            ->getQuery()->getOneOrNullResult();
+        // The longest, then the greatest: an order on an expression (LENGTH), which no word of the language says.
+        $rows = $this->sql('SELECT l.{EntryLine.letter} AS letter FROM {EntryLine} l JOIN {Entry} e ON e.{Entry.id} = l.{EntryLine.entry}'
+            .' WHERE e.{Entry.book} = ? AND l.{EntryLine.letter} IS NOT NULL ORDER BY LENGTH(l.{EntryLine.letter}) DESC, l.{EntryLine.letter} DESC LIMIT 1', [$book]);
 
-        return $row['letter'] ?? null;
+        return \is_array($rows) && isset($rows[0]['letter']) ? (string) $rows[0]['letter'] : null;
     }
 
     /**
@@ -135,16 +126,34 @@ class EntryLineRepository extends ServiceEntityRepository
      */
     public function totalsByAccount(Book $book, ?\DateTimeImmutable $from = null, ?\DateTimeImmutable $to = null, bool $validatedOnly = false, array $dimensions = [], ?string $groupBy = null): array
     {
-        $qb = $this->dimensions($this->period($this->lines($book), $from, $to, $validatedOnly), $dimensions)
-            ->select('a.number AS number, a.label AS label, a.type AS type, SUM(l.debit) AS debit, SUM(l.credit) AS credit')
-            ->groupBy('a.id, a.number, a.label, a.type')
-            ->orderBy('a.number', 'ASC');
-        if (null !== $groupBy) {
-            $qb->leftJoin('l.dimensions', 'g', 'WITH', 'g.axis = :group')->setParameter('group', EntryLineDimension::axis($groupBy))
-                ->addSelect('g.value AS dimension')->addGroupBy('g.value');
+        $criteria = array_merge($this->lines($book), $this->period($from, $to, $validatedOnly), $this->carrying($dimensions));
+        $values = ['number' => 'account.number', 'label' => 'account.label', 'type' => 'account.type', 'debit' => Aggregate::sum('debit'), 'credit' => Aggregate::sum('credit')];
+        if (null === $groupBy) {
+            $rows = $this->findValuesBy($values, $criteria, ['number' => 'ASC']);
+        } else {
+            // Per value of the axis: the lines without it (null), then those with it, read from their dimension.
+            $axis = EntryLineDimension::axis($groupBy);
+            $rows = array_map(static fn (array $row) => $row + ['dimension' => null], $this->findValuesBy($values, array_merge($criteria, [Criterion::notExists(EntryLineDimension::class, 'line', ['axis' => $axis])]), ['number' => 'ASC']));
+            $lines = array_column($this->findValuesBy(['id' => 'id'], $criteria), 'id');
+            if ([] !== $lines) {
+                $rows = [...$rows, ...$this->dimensions()->findValuesBy(
+                    ['number' => 'line.account.number', 'label' => 'line.account.label', 'type' => 'line.account.type', 'debit' => Aggregate::sum('line.debit'), 'credit' => Aggregate::sum('line.credit'), 'dimension' => 'value'],
+                    ['axis' => $axis, 'line' => Key::of($lines)],
+                    ['number' => 'ASC'],
+                )];
+            }
+            usort($rows, static fn (array $a, array $b) => strcmp((string) $a['number'], (string) $b['number']));
         }
 
-        return array_map(fn (array $row) => ['debit' => (int) $row['debit'], 'credit' => (int) $row['credit']] + $row, $qb->getQuery()->getArrayResult());
+        return array_map(static function (array $row) use ($groupBy): array {
+            $total = [
+                'debit' => (int) $row['debit'], 'credit' => (int) $row['credit'],
+                'number' => (string) $row['number'], 'label' => (string) $row['label'],
+                'type' => $row['type'] instanceof AccountType ? $row['type'] : AccountType::from((string) $row['type']),
+            ];
+
+            return null === $groupBy ? $total : $total + ['dimension' => null === $row['dimension'] ? null : (string) $row['dimension']];
+        }, $rows);
     }
 
     /**
@@ -155,21 +164,27 @@ class EntryLineRepository extends ServiceEntityRepository
      */
     public function taxTotals(Book $book, \DateTimeImmutable $from, \DateTimeImmutable $to): array
     {
-        $qb = $this->period($this->lines($book), $from, $to, false)
-            ->join('l.tax', 't')
-            ->leftJoin('t.account', 'ta')
-            ->leftJoin('t.deductibleAccount', 'tda')
-            ->select('t.code AS code, t.label AS label, t.rate AS rate, t.kind AS kind, a.number AS account, ta.number AS tax_account, tda.number AS deductible_account')
-            ->addSelect('SUM(l.debit) AS debit, SUM(l.credit) AS credit')
-            ->addSelect('SUM(CASE WHEN l.debit > 0 THEN COALESCE(l.taxBase, 0) ELSE 0 END) AS base_debit')
-            ->addSelect('SUM(CASE WHEN l.credit > 0 THEN COALESCE(l.taxBase, 0) ELSE 0 END) AS base_credit')
-            ->groupBy('t.id, t.code, t.label, t.rate, t.kind, a.number, ta.number, tda.number')
-            ->orderBy('t.code', 'ASC')->addOrderBy('a.number', 'ASC');
+        $criteria = array_merge($this->lines($book), $this->period($from, $to, false), [Group::of(Parser::SEPARATOR_AND, Criterion::of('tax', Key::of(null), Parser::OPTION_NOT_EQUAL))]);
+        $keys = ['code' => 'tax.code', 'label' => 'tax.label', 'rate' => 'tax.rate', 'kind' => 'tax.kind', 'account' => 'account.number', 'tax_account' => 'tax.account.number', 'deductible_account' => 'tax.deductibleAccount.number'];
+        $order = ['code' => 'ASC', 'account' => 'ASC'];
+        $key = static fn (array $row): string => implode("\0", array_map(static fn (string $name) => (string) $row[$name], array_keys($keys)));
+        // The tax bases of the debit lines and of the credit lines: the same groups, read apart.
+        $bases = [];
+        foreach (['base_debit' => 'debit', 'base_credit' => 'credit'] as $name => $side) {
+            foreach ($this->findValuesBy($keys + ['base' => Aggregate::sum('taxBase')], array_merge($criteria, [Group::of(Parser::SEPARATOR_AND, Criterion::of($side, 0, Parser::OPTION_GREATER))]), $order) as $row) {
+                $bases[$key($row)][$name] = (int) $row['base'];
+            }
+        }
 
-        return array_map(fn (array $row) => array_merge($row, [
-            'rate' => (int) $row['rate'], 'debit' => (int) $row['debit'], 'credit' => (int) $row['credit'],
-            'base_debit' => (int) $row['base_debit'], 'base_credit' => (int) $row['base_credit'],
-        ]), $qb->getQuery()->getArrayResult());
+        return array_map(static fn (array $row): array => [
+            'code' => (string) $row['code'], 'label' => (string) $row['label'], 'rate' => (int) $row['rate'],
+            'kind' => $row['kind'] instanceof TaxKind ? $row['kind'] : TaxKind::from((string) $row['kind']),
+            'account' => (string) $row['account'],
+            'tax_account' => null === $row['tax_account'] ? null : (string) $row['tax_account'],
+            'deductible_account' => null === $row['deductible_account'] ? null : (string) $row['deductible_account'],
+            'debit' => (int) $row['debit'], 'credit' => (int) $row['credit'],
+            'base_debit' => $bases[$key($row)]['base_debit'] ?? 0, 'base_credit' => $bases[$key($row)]['base_credit'] ?? 0,
+        ], $this->findValuesBy($keys + ['debit' => Aggregate::sum('debit'), 'credit' => Aggregate::sum('credit')], $criteria, $order));
     }
 
     /**
@@ -179,15 +194,12 @@ class EntryLineRepository extends ServiceEntityRepository
      */
     public function axes(Book $book): array
     {
-        $rows = $this->getEntityManager()->createQueryBuilder()
-            ->select('d.axis AS axis, COUNT(DISTINCT d.value) AS n')
-            ->from(EntryLineDimension::class, 'd')
-            ->join('d.line', 'l')->join('l.entry', 'e')
-            ->andWhere('e.book = :book')->setParameter('book', $book)
-            ->groupBy('d.axis')->orderBy('d.axis', 'ASC')
-            ->getQuery()->getArrayResult();
+        $axes = [];
+        foreach ($this->dimensions()->findValuesBy(['axis' => 'axis', 'n' => Aggregate::countDistinct('value')], ['line.entry.book' => $book], ['axis' => 'ASC']) as $row) {
+            $axes[(string) $row['axis']] = (int) $row['n'];
+        }
 
-        return array_combine(array_column($rows, 'axis'), array_map('intval', array_column($rows, 'n'))) ?: [];
+        return $axes;
     }
 
     /**
@@ -201,16 +213,13 @@ class EntryLineRepository extends ServiceEntityRepository
      */
     public function forLedger(Book $book, ?\DateTimeImmutable $from = null, ?\DateTimeImmutable $to = null, ?string $accountPrefix = null, array $dimensions = [], bool $withDimensions = false): array
     {
-        $qb = $this->dimensions($this->period($this->lines($book), $from, $to, false), $dimensions)
-            ->orderBy('a.number', 'ASC')->addOrderBy('e.date', 'ASC')->addOrderBy('l.id', 'ASC');
-        if ($withDimensions) {
-            $qb->leftJoin('l.dimensions', 'dims')->addSelect('dims');
-        }
+        $criteria = array_merge($this->lines($book), $this->period($from, $to, false), $this->carrying($dimensions));
         if (null !== $accountPrefix && '' !== $accountPrefix) {
-            $qb->andWhere('a.number LIKE :prefix')->setParameter('prefix', addcslashes(Account::normalize($accountPrefix), '%_').'%');
+            $criteria[] = $this->under($accountPrefix);
         }
 
-        return $qb->getQuery()->getResult();
+        // $withDimensions: each line's dimensions load with its collection when read.
+        return $this->findBy($criteria, ['account.number' => 'ASC', 'entry.date' => 'ASC', 'id' => 'ASC']);
     }
 
     /**
@@ -221,67 +230,72 @@ class EntryLineRepository extends ServiceEntityRepository
      */
     public function sumUnder(Book $book, string $accountPrefix, ?\DateTimeImmutable $from = null, ?\DateTimeImmutable $to = null, bool $openOnly = false): array
     {
-        $qb = $this->period($this->lines($book), $from, $to, false)
-            ->select('COALESCE(SUM(l.debit), 0) AS debit, COALESCE(SUM(l.credit), 0) AS credit')
-            ->andWhere('a.number LIKE :prefix')->setParameter('prefix', addcslashes(Account::normalize($accountPrefix), '%_').'%');
+        $criteria = $this->lines($book) + $this->period($from, $to);
+        $criteria[] = $this->under($accountPrefix);
         if ($openOnly) {
-            $qb->andWhere('l.letter IS NULL');
+            $criteria[] = Group::of(Parser::SEPARATOR_AND, Criterion::of('letter', null, Parser::OPTION_NULL));
         }
-        $row = $qb->getQuery()->getSingleResult();
 
-        return ['debit' => (int) $row['debit'], 'credit' => (int) $row['credit']];
+        return ['debit' => (int) $this->sumOfDebitBy($criteria), 'credit' => (int) $this->sumOfCreditBy($criteria)];
     }
 
     /** An account's balance (debit minus credit), all dates or up to $to. */
     public function balance(Account $account, ?\DateTimeImmutable $to = null): int
     {
-        $qb = $this->createQueryBuilder('l')
-            ->select('COALESCE(SUM(l.debit), 0) AS debit, COALESCE(SUM(l.credit), 0) AS credit')
-            ->join('l.entry', 'e')
-            ->andWhere('l.account = :account')->setParameter('account', $account);
-        if (null !== $to) {
-            $qb->andWhere('e.date <= :to')->setParameter('to', $to->setTime(0, 0), 'date_immutable');
-        }
-        // DQL has no arithmetic between aggregates: the difference is made here.
-        $row = $qb->getQuery()->getSingleResult();
+        $criteria = ['account' => Key::of($account)] + $this->period(null, $to);
 
-        return (int) $row['debit'] - (int) $row['credit'];
+        return (int) $this->sumOfDebitBy($criteria) - (int) $this->sumOfCreditBy($criteria);
     }
 
-    private function lines(Book $book): QueryBuilder
+    /** @return array<int|string, mixed> the lines of a book's entries */
+    private function lines(Book $book): array
     {
-        return $this->createQueryBuilder('l')
-            ->join('l.entry', 'e')->addSelect('e')
-            ->join('l.account', 'a')->addSelect('a')
-            ->andWhere('e.book = :book')->setParameter('book', $book);
+        return ['entry.book' => $book];
     }
 
-    /** Only the lines carrying each axis => value of $dimensions. */
-    private function dimensions(QueryBuilder $qb, array $dimensions): QueryBuilder
+    /** @return array<int|string, mixed> the lines of the entries dated in [$from, $to] (either open), validated ones only if asked */
+    private function period(?\DateTimeImmutable $from, ?\DateTimeImmutable $to, bool $validatedOnly = false): array
     {
-        $i = 0;
-        foreach ($dimensions as $axis => $value) {
-            $qb->join('l.dimensions', 'd'.$i, 'WITH', sprintf('d%1$d.axis = :axis%1$d AND d%1$d.value = :value%1$d', $i))
-                ->setParameter('axis'.$i, EntryLineDimension::axis((string) $axis))
-                ->setParameter('value'.$i, EntryLineDimension::value((string) $value));
-            ++$i;
-        }
-
-        return $qb;
-    }
-
-    private function period(QueryBuilder $qb, ?\DateTimeImmutable $from, ?\DateTimeImmutable $to, bool $validatedOnly): QueryBuilder
-    {
+        $criteria = [];
         if (null !== $from) {
-            $qb->andWhere('e.date >= :from')->setParameter('from', $from->setTime(0, 0), 'date_immutable');
+            $criteria[] = Group::of(Parser::SEPARATOR_AND, Criterion::of('entry.date', $from->setTime(0, 0), Parser::OPTION_GREATER_EQUAL));
         }
         if (null !== $to) {
-            $qb->andWhere('e.date <= :to')->setParameter('to', $to->setTime(0, 0), 'date_immutable');
+            $criteria[] = Group::of(Parser::SEPARATOR_AND, Criterion::of('entry.date', $to->setTime(0, 0), Parser::OPTION_LOWER_EQUAL));
         }
         if ($validatedOnly) {
-            $qb->andWhere('e.validatedAt IS NOT NULL');
+            $criteria[] = Group::of(Parser::SEPARATOR_AND, Criterion::of('entry.validatedAt', null, Parser::OPTION_NOT_NULL));
         }
 
-        return $qb;
+        return $criteria;
+    }
+
+    /**
+     * @param array<string, string|int> $dimensions only the lines carrying each axis => value
+     *
+     * @return list<Criterion>
+     */
+    private function carrying(array $dimensions): array
+    {
+        $criteria = [];
+        foreach ($dimensions as $axis => $value) {
+            $criteria[] = Criterion::exists(EntryLineDimension::class, 'line', ['axis' => EntryLineDimension::axis((string) $axis), 'value' => EntryLineDimension::value((string) $value)]);
+        }
+
+        return $criteria;
+    }
+
+    /** The lines' dimensions, read by the same language (a repository of the class, as Repositories::of() gives one). */
+    private function dimensions(): ServiceEntityRepository
+    {
+        return $this->dimensions ??= new ServiceEntityRepository($this->finders(), EntryLineDimension::class);
+    }
+
+    private ?ServiceEntityRepository $dimensions = null;
+
+    /** The lines of the accounts under a prefix ("6", "411"). */
+    private function under(string $accountPrefix): Group
+    {
+        return Group::of(Parser::SEPARATOR_AND, Criterion::of('account.number', Account::normalize($accountPrefix), Parser::OPTION_STARTING_WITH));
     }
 }

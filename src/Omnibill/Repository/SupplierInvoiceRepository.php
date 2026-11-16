@@ -6,15 +6,19 @@ use Base\Ledger\Entity\Book;
 use Base\Ledger\Entity\Entry;
 use Base\Ledger\Omnibill\Entity\SupplierInvoice;
 use Base\Ledger\Omnibill\Enum\SupplierInvoiceStatus;
-use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
-use Doctrine\Persistence\ManagerRegistry;
+use Base\Database\Repository\Finder\Criterion;
+use Base\Database\Repository\Finder\Group;
+use Base\Database\Repository\Finder\Key;
+use Base\Database\Repository\Finder\Parser;
+use Base\Database\Repository\ServiceEntityRepository;
+use Base\Database\Repository\Finders;
 
 /** @extends ServiceEntityRepository<SupplierInvoice> */
 class SupplierInvoiceRepository extends ServiceEntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
+    public function __construct(Finders $finders)
     {
-        parent::__construct($registry, SupplierInvoice::class);
+        parent::__construct($finders, SupplierInvoice::class);
     }
 
     /** The invoice that holds this "<supplier>|<number>" in the book: the first one received. */
@@ -49,24 +53,22 @@ class SupplierInvoiceRepository extends ServiceEntityRepository
      */
     public function forBook(Book $book, array $statuses = [], int $limit = 200): array
     {
-        $qb = $this->createQueryBuilder('i')
-            ->andWhere('i.book = :book')->setParameter('book', $book)
-            ->orderBy('i.receivedAt', 'DESC')->addOrderBy('i.id', 'DESC')
-            ->setMaxResults($limit);
+        $criteria = ['book' => Key::of($book)];
         if ([] !== $statuses) {
-            $qb->andWhere('i.status IN (:statuses)')->setParameter('statuses', array_map(static fn (SupplierInvoiceStatus $s) => $s->value, $statuses));
+            $criteria['status'] = array_values($statuses);
         }
 
-        return $qb->getQuery()->getResult();
+        return $this->findBy($criteria, ['receivedAt' => 'DESC', 'id' => 'DESC'], $limit);
     }
 
-    /** @return array<string, int> status => how many, for the book */
+    /** @return array<string, int> status => how many, for the book (the statuses it has invoices in; a count per status) */
     public function counts(Book $book): array
     {
         $counts = [];
-        foreach ($this->createQueryBuilder('i')->select('i.status AS status, COUNT(i.id) AS n')->andWhere('i.book = :book')->setParameter('book', $book)->groupBy('i.status')->getQuery()->getArrayResult() as $row) {
-            $status = $row['status'] instanceof SupplierInvoiceStatus ? $row['status']->value : (string) $row['status'];
-            $counts[$status] = (int) $row['n'];
+        foreach (SupplierInvoiceStatus::cases() as $status) {
+            if (0 < $n = $this->count(['book' => Key::of($book), 'status' => $status])) {
+                $counts[$status->value] = $n;
+            }
         }
 
         return $counts;
@@ -79,9 +81,9 @@ class SupplierInvoiceRepository extends ServiceEntityRepository
      */
     public function fromGateways(int $limit = 500): array
     {
-        return $this->createQueryBuilder('i')
-            ->andWhere('i.gateway IS NOT NULL AND i.flowReference IS NOT NULL')
-            ->orderBy('i.id', 'DESC')->setMaxResults($limit)
-            ->getQuery()->getResult();
+        return $this->findBy([Group::of(Parser::SEPARATOR_AND,
+            Criterion::of('gateway', null, Parser::OPTION_NOT_NULL),
+            Criterion::of('flowReference', null, Parser::OPTION_NOT_NULL),
+        )], ['id' => 'DESC'], $limit);
     }
 }

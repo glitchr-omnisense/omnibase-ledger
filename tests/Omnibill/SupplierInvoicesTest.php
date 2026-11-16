@@ -338,7 +338,7 @@ class SupplierInvoicesTest extends InMemoryOmnibill
 
         $dispatcher = new EventDispatcher();
         $dispatcher->addListener(BankLineReconciled::class, new PaidInvoiceListener($this->supplierInvoiceRepository(), $invoices));
-        $reconciler = new Reconciler($this->entityManager(), $this->posting(), $this->lettering(), $this->matcher(), $this->bankLineRepository(), 0.9, $dispatcher);
+        $reconciler = new Reconciler($this->unitOfWork(), $this->posting(), $this->lettering(), $this->matcher(), $this->bankLineRepository(), 0.9, $dispatcher);
         $line = $this->bankLine(-12000, 'PRLV SEPA EDF FA-2026-118', $invoice->getSupplierIban(), 'EDF', 'FA-2026-118', '2026-11-20');
         $suggestion = array_values(array_filter($this->matcher()->suggest($line), static fn ($s) => [] !== $s->openItems && $s->openItems[0]->getEntry() === $invoice->getEntry()))[0];
         $reconciler->apply($line, $suggestion);

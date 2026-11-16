@@ -3,7 +3,7 @@
 namespace Base\Ledger\Entity;
 
 use Base\Ledger\Repository\BankCounterpartyMonthRepository;
-use Doctrine\ORM\Mapping as ORM;
+use Base\Mapping as ORM;
 
 /**
  * What one counterparty paid into or took from one bank account in one

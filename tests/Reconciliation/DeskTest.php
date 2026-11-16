@@ -17,7 +17,9 @@ use Base\Ledger\Exception\ReconciliationException;
 use Base\Ledger\Reconciliation\Desk;
 use Base\Ledger\Reconciliation\Reconciler;
 use Base\Ledger\Repository\BankAccountRepository;
-use Doctrine\ORM\EntityManagerInterface;
+use Base\Contract\UnitOfWork;
+use Base\Database\Repository\Entities;
+use Base\Database\Repository\Repositories;
 use Symfony\Component\EventDispatcher\EventDispatcher;
 use Tests\Base\Ledger\InMemoryLedger;
 
@@ -217,19 +219,28 @@ class DeskTest extends InMemoryLedger
         foreach ([BankLineReconciled::class, BankLineUnreconciled::class] as $event) {
             $dispatcher->addListener($event, function (object $told): void { $this->events[] = $told; });
         }
-        $em = $this->deskEntityManager();
-        $reconciler = new Reconciler($em, $this->posting(), $this->lettering(), $this->matcher(), $this->bankLineRepository(), 0.9, $dispatcher, $this->taxRepository());
+        [$unitOfWork, $repositories] = $this->deskPersistence();
+        $reconciler = new Reconciler($unitOfWork, $this->posting(), $this->lettering(), $this->matcher(), $this->bankLineRepository(), 0.9, $dispatcher, $this->taxRepository());
         $bankAccounts = $this->createStub(BankAccountRepository::class);
         $bankAccounts->method('forBook')->willReturnCallback(fn () => [$this->bankAccount()]);
 
-        return new Desk($em, $this->matcher(), $reconciler, $this->bankLineRepository(), $this->accountRepository(), $bankAccounts);
+        return new Desk($unitOfWork, $repositories, $this->matcher(), $reconciler, $this->bankLineRepository(), $this->accountRepository(), $bankAccounts);
     }
 
-    /** The in-memory entity manager, finding what it holds by id and noting what is removed. */
-    private function deskEntityManager(): EntityManagerInterface
+    /**
+     * The in-memory unit of work, noting what is removed, and the repositories finding what it holds by id.
+     *
+     * @return array{0: UnitOfWork, 1: Repositories}
+     */
+    private function deskPersistence(): array
     {
-        $em = $this->entityManager();
-        $em->method('find')->willReturnCallback(function (string $class, mixed $id) {
+        $unitOfWork = $this->unitOfWork();
+        $unitOfWork->method('remove')->willReturnCallback(function (object $entity): void {
+            $this->removed[] = $entity;
+            $this->rules = array_values(array_filter($this->rules, fn ($rule) => $rule !== $entity));
+        });
+        $repositories = $this->createStub(Repositories::class);
+        $repositories->method('of')->willReturnCallback(function (string $class) {
             $pool = match ($class) {
                 BankLine::class => $this->bankLines,
                 EntryLine::class => $this->allLines(),
@@ -238,20 +249,21 @@ class DeskTest extends InMemoryLedger
                 BankAccount::class => [$this->bankAccount()],
                 default => [],
             };
-            foreach ($pool as $record) {
-                if ($record->getId() === (int) $id) {
-                    return $record;
+            $entities = $this->createStub(Entities::class);
+            $entities->method('find')->willReturnCallback(function (mixed $id) use ($pool) {
+                foreach ($pool as $record) {
+                    if ($record->getId() === (int) $id) {
+                        return $record;
+                    }
                 }
-            }
 
-            return null;
-        });
-        $em->method('remove')->willReturnCallback(function (object $entity): void {
-            $this->removed[] = $entity;
-            $this->rules = array_values(array_filter($this->rules, fn ($rule) => $rule !== $entity));
+                return null;
+            });
+
+            return $entities;
         });
 
-        return $em;
+        return [$unitOfWork, $repositories];
     }
 
     /** @return list<object> */

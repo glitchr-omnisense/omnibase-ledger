@@ -12,7 +12,7 @@ use Base\Ledger\Omnibill\Enum\ExportState;
 use Base\Ledger\Omnibill\Repository\AccountingExportItemRepository;
 use Base\Ledger\Omnibill\Repository\AccountingExportRepository;
 use Base\Ledger\Repository\EntryRepository;
-use Doctrine\ORM\EntityManagerInterface;
+use Base\Contract\UnitOfWork;
 use Omnibill\ContactLookupInterface;
 use Omnibill\ContactsInterface;
 use Omnibill\EntryLookupInterface;
@@ -69,7 +69,7 @@ use Symfony\Component\Lock\LockFactory;
 class AccountingExporter
 {
     public function __construct(
-        private readonly EntityManagerInterface $entityManager,
+        private readonly UnitOfWork $unitOfWork,
         private readonly EntryRepository $entries,
         private readonly AccountingExportRepository $runs,
         private readonly AccountingExportItemRepository $items,
@@ -119,9 +119,9 @@ class AccountingExporter
                 $run->resume();
             } else {
                 $run = new AccountingExport($book, $gateway, $from, $to, $by);
-                $this->entityManager->persist($run);
+                $this->unitOfWork->persist($run);
             }
-            $this->entityManager->flush();
+            $this->unitOfWork->flush();
 
             try {
                 $period = $this->entries->forPeriod($book, $from, $to);
@@ -137,7 +137,7 @@ class AccountingExporter
             } catch (UnreachableException|InvalidKeyException|UsageLimitReachedException $e) {
                 $run->fail($e->getMessage());
             }
-            $this->entityManager->flush();
+            $this->unitOfWork->flush();
         } finally {
             $lock?->release();
         }
@@ -166,7 +166,7 @@ class AccountingExporter
         [$books, $contacts] = $this->contracts($item->getGateway());
         $run = $item->getRun() ?? new AccountingExport($item->getBook(), $item->getGateway(), new \DateTimeImmutable('today'), new \DateTimeImmutable('today'), $by);
         if (null === $run->getId()) {
-            $this->entityManager->persist($run);
+            $this->unitOfWork->persist($run);
         }
         try {
             if (AccountingExportItem::CONTACT === $item->getKind()) {
@@ -182,7 +182,7 @@ class AccountingExporter
         } catch (UnreachableException|InvalidKeyException|UsageLimitReachedException $e) {
             throw new LedgerException($e->getMessage(), 0, $e);
         } finally {
-            $this->entityManager->flush();
+            $this->unitOfWork->flush();
         }
 
         return $item;
@@ -203,7 +203,7 @@ class AccountingExporter
             return;
         }
         $item->sent($run, $item->getReference(), $item->getNumber(), $this->mapper->fingerprint($record));
-        $this->entityManager->flush();
+        $this->unitOfWork->flush();
     }
 
     /** @return array{JournalEntriesInterface, ?ContactsInterface} */
@@ -270,17 +270,17 @@ class AccountingExporter
             $run->count('contact');
         } catch (OutcomeUnknownException $e) {
             $item->unknown($run, $e->getMessage(), $fingerprint);
-            $this->entityManager->flush();
+            $this->unitOfWork->flush();
             throw $e;
         } catch (UnreachableException|InvalidKeyException|UsageLimitReachedException $e) {
             $item->failed($run, $e->getMessage(), $fingerprint);
-            $this->entityManager->flush();
+            $this->unitOfWork->flush();
             throw $e;
         } catch (ProviderException|InvalidConfigException|NotSupportedException|\LogicException $e) {
             $item->refused($run, $e->getMessage(), $fingerprint);
             $run->count('refused');
         }
-        $this->entityManager->flush();
+        $this->unitOfWork->flush();
     }
 
     private function sendEntry(AccountingExport $run, JournalEntriesInterface $books, Entry $entry, bool $contacts, bool $retry = false): void
@@ -302,17 +302,17 @@ class AccountingExporter
             $run->count('entry');
         } catch (OutcomeUnknownException $e) {
             $item->unknown($run, $e->getMessage(), $fingerprint);
-            $this->entityManager->flush();
+            $this->unitOfWork->flush();
             throw $e;
         } catch (UnreachableException|InvalidKeyException|UsageLimitReachedException $e) {
             $item->failed($run, $e->getMessage(), $fingerprint);
-            $this->entityManager->flush();
+            $this->unitOfWork->flush();
             throw $e;
         } catch (ProviderException|InvalidConfigException|NotSupportedException|\LogicException $e) {
             $item->refused($run, $e->getMessage(), $fingerprint);
             $run->count('refused');
         }
-        $this->entityManager->flush();
+        $this->unitOfWork->flush();
     }
 
     /**
@@ -336,7 +336,7 @@ class AccountingExporter
         } catch (ProviderException|InvalidConfigException|NotSupportedException $e) {
             // Asked, and no answer to rely on: a person checks.
             $item->unknown($run, $e->getMessage(), $item->getFingerprint());
-            $this->entityManager->flush();
+            $this->unitOfWork->flush();
 
             return $retry;
         }
@@ -346,7 +346,7 @@ class AccountingExporter
         // The software took it: what it took is what was sent then, the fingerprint kept (a change since is flagged next time).
         $item->sent($run, $found->reference ?? $item->getRecordKey(), $found->number, $item->getFingerprint());
         $run->count('skipped');
-        $this->entityManager->flush();
+        $this->unitOfWork->flush();
 
         return false;
     }
@@ -376,7 +376,7 @@ class AccountingExporter
         } catch (ProviderException|InvalidConfigException|NotSupportedException $e) {
             // Asked, and no answer to rely on: a person checks.
             $item->unknown($run, $e->getMessage(), $item->getFingerprint());
-            $this->entityManager->flush();
+            $this->unitOfWork->flush();
 
             return $retry;
         }
@@ -386,14 +386,14 @@ class AccountingExporter
         if (!self::sameContact($contact, $found) || null === $found->reference) {
             // Not the one sent: never taken for it, never created beside it on its own.
             $item->unknown($run, sprintf('The software has a contact under the key "%s" that is not this %s (its id %s): check it, then send again.', $contact->key, $contact->kind->value, $found->reference ?? '-'), $item->getFingerprint());
-            $this->entityManager->flush();
+            $this->unitOfWork->flush();
 
             return $retry;
         }
         // The software took it: what it took is what was sent then, the fingerprint kept (a change since is flagged next time).
         $item->sent($run, $found->reference, null, $item->getFingerprint());
         $run->count('skipped');
-        $this->entityManager->flush();
+        $this->unitOfWork->flush();
 
         return false;
     }
@@ -428,7 +428,7 @@ class AccountingExporter
             $item->changed($run);
         }
         $run->count('changed');
-        $this->entityManager->flush();
+        $this->unitOfWork->flush();
     }
 
     private function item(AccountingExport $run, string $kind, string $key, string $fingerprint, ?Entry $entry = null, ?Party $party = null): AccountingExportItem
@@ -436,7 +436,7 @@ class AccountingExporter
         $item = $this->items->findOneByKey($run->getBook(), $run->getGateway(), $kind, $key);
         if (null === $item) {
             $item = new AccountingExportItem($run->getBook(), $run->getGateway(), $kind, $key, $fingerprint, $entry, $party);
-            $this->entityManager->persist($item);
+            $this->unitOfWork->persist($item);
         }
 
         return $item;

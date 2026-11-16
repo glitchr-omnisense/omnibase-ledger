@@ -4,7 +4,7 @@ namespace Base\Ledger\Entity;
 
 use Base\Ledger\Enum\TaxKind;
 use Base\Ledger\Repository\TaxRepository;
-use Doctrine\ORM\Mapping as ORM;
+use Base\Mapping as ORM;
 use Symfony\Component\Validator\Constraints as Assert;
 
 /**

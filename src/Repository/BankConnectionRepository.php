@@ -4,15 +4,15 @@ namespace Base\Ledger\Repository;
 
 use Base\Ledger\Entity\BankConnection;
 use Base\Ledger\Entity\Book;
-use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
-use Doctrine\Persistence\ManagerRegistry;
+use Base\Database\Repository\ServiceEntityRepository;
+use Base\Database\Repository\Finders;
 
 /** @extends ServiceEntityRepository<BankConnection> */
 class BankConnectionRepository extends ServiceEntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
+    public function __construct(Finders $finders)
     {
-        parent::__construct($registry, BankConnection::class);
+        parent::__construct($finders, BankConnection::class);
     }
 
     /** @return list<BankConnection> */

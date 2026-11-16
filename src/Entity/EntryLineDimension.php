@@ -2,7 +2,7 @@
 
 namespace Base\Ledger\Entity;
 
-use Doctrine\ORM\Mapping as ORM;
+use Base\Mapping as ORM;
 
 /**
  * An analytic axis of an entry line and its value: unit=12, owner=5,

@@ -4,34 +4,36 @@ namespace Base\Ledger\Repository;
 
 use Base\Ledger\Entity\Book;
 use Base\Ledger\Entity\FiscalYear;
-use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
-use Doctrine\Persistence\ManagerRegistry;
+use Base\Database\Repository\Finder\Criterion;
+use Base\Database\Repository\Finder\Group;
+use Base\Database\Repository\Finder\Key;
+use Base\Database\Repository\Finder\Parser;
+use Base\Database\Repository\ServiceEntityRepository;
+use Base\Database\Repository\Finders;
 
 /** @extends ServiceEntityRepository<FiscalYear> */
 class FiscalYearRepository extends ServiceEntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
+    public function __construct(Finders $finders)
     {
-        parent::__construct($registry, FiscalYear::class);
+        parent::__construct($finders, FiscalYear::class);
     }
 
     /** The fiscal year of $book that $date falls in, if the book has one. */
     public function containing(Book $book, \DateTimeInterface $date): ?FiscalYear
     {
-        return $this->createQueryBuilder('y')
-            ->andWhere('y.book = :book')->setParameter('book', $book)
-            ->andWhere('y.start <= :date AND y.end >= :date')->setParameter('date', \DateTimeImmutable::createFromInterface($date)->setTime(0, 0), 'date_immutable')
-            ->setMaxResults(1)
-            ->getQuery()->getOneOrNullResult();
+        $day = \DateTimeImmutable::createFromInterface($date)->setTime(0, 0);
+
+        return $this->findOneBy(['book' => Key::of($book), Group::of(Parser::SEPARATOR_AND,
+            Criterion::of('start', $day, Parser::OPTION_LOWER_EQUAL),
+            Criterion::of('end', $day, Parser::OPTION_GREATER_EQUAL),
+        )]);
     }
 
     /** The fiscal year closing in $year, else the calendar year $year (unsaved). */
     public function forYear(Book $book, int $year): FiscalYear
     {
-        $years = $this->createQueryBuilder('y')
-            ->andWhere('y.book = :book')->setParameter('book', $book)
-            ->orderBy('y.end', 'DESC')
-            ->getQuery()->getResult();
+        $years = $this->findBy(['book' => Key::of($book)], ['end' => 'DESC']);
         foreach ($years as $fiscalYear) {
             if ((int) $fiscalYear->getEnd()->format('Y') === $year) {
                 return $fiscalYear;

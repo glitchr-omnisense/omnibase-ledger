@@ -29,7 +29,7 @@ use Base\Ledger\Repository\ReconciliationRuleRepository;
 use Base\Ledger\Repository\TaxRepository;
 use Base\Ledger\Service\Lettering;
 use Base\Ledger\Service\Posting;
-use Doctrine\ORM\EntityManagerInterface;
+use Base\Contract\UnitOfWork;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -148,9 +148,9 @@ abstract class InMemoryLedger extends TestCase
         return $this->bankLines[] = $this->persisted($line);
     }
 
-    protected function entityManager(): EntityManagerInterface
+    protected function unitOfWork(): UnitOfWork
     {
-        $em = $this->createStub(EntityManagerInterface::class);
+        $em = $this->createStub(UnitOfWork::class);
         $em->method('persist')->willReturnCallback(function (object $entity): void {
             if ($entity instanceof Entry) {
                 if (!\in_array($entity, $this->entries, true)) {
@@ -377,12 +377,12 @@ abstract class InMemoryLedger extends TestCase
 
     protected function posting(bool $autoAccounts = false): Posting
     {
-        return new Posting($this->entityManager(), $this->accountRepository(), $this->journalRepository(), $this->entryRepository(), $this->fiscalYearRepository(), $autoAccounts, null, $this->taxRepository());
+        return new Posting($this->unitOfWork(), $this->accountRepository(), $this->journalRepository(), $this->entryRepository(), $this->fiscalYearRepository(), $autoAccounts, null, $this->taxRepository());
     }
 
     protected function lettering(): Lettering
     {
-        return $this->lettering ??= new Lettering($this->entityManager(), $this->lineRepository());
+        return $this->lettering ??= new Lettering($this->unitOfWork(), $this->lineRepository());
     }
 
     private ?Lettering $lettering = null;
@@ -394,7 +394,7 @@ abstract class InMemoryLedger extends TestCase
 
     protected function reconciler(float $threshold = 0.9): Reconciler
     {
-        return new Reconciler($this->entityManager(), $this->posting(), $this->lettering(), $this->matcher(), $this->bankLineRepository(), $threshold, null, $this->taxRepository());
+        return new Reconciler($this->unitOfWork(), $this->posting(), $this->lettering(), $this->matcher(), $this->bankLineRepository(), $threshold, null, $this->taxRepository());
     }
 
     /**

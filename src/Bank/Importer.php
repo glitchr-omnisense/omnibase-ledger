@@ -5,7 +5,7 @@ namespace Base\Ledger\Bank;
 use Base\Ledger\Entity\BankAccount;
 use Base\Ledger\Entity\BankLine;
 use Base\Ledger\Repository\BankLineRepository;
-use Doctrine\ORM\EntityManagerInterface;
+use Base\Contract\UnitOfWork;
 use Omnibank\Model\BankTransaction;
 
 /**
@@ -17,7 +17,7 @@ use Omnibank\Model\BankTransaction;
 class Importer
 {
     public function __construct(
-        private readonly EntityManagerInterface $entityManager,
+        private readonly UnitOfWork $unitOfWork,
         private readonly BankLineRepository $lines,
     ) {
     }
@@ -38,7 +38,7 @@ class Importer
             $line = $this->lines->findOneByExternalId($account, $transaction->id);
             if (null === $line) {
                 $line = new BankLine($account, $transaction->id, $transaction->bookedOn, $transaction->amount->amount, $transaction->label, $transaction->amount->currency);
-                $this->entityManager->persist($line);
+                $this->unitOfWork->persist($line);
                 ++$created;
             } elseif (!$line->getStatus()->isPending()) {
                 $seen[$transaction->id] = true;
@@ -55,7 +55,7 @@ class Importer
                 ->setCategory($transaction->category ?? $line->getCategory());
             $seen[$transaction->id] = true;
         }
-        $this->entityManager->flush();
+        $this->unitOfWork->flush();
 
         return $created;
     }

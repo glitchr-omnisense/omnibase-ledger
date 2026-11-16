@@ -4,15 +4,15 @@ namespace Base\Ledger\Repository;
 
 use Base\Ledger\Entity\Book;
 use Base\Ledger\Entity\Party;
-use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
-use Doctrine\Persistence\ManagerRegistry;
+use Base\Database\Repository\ServiceEntityRepository;
+use Base\Database\Repository\Finders;
 
 /** @extends ServiceEntityRepository<Party> */
 class PartyRepository extends ServiceEntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
+    public function __construct(Finders $finders)
     {
-        parent::__construct($registry, Party::class);
+        parent::__construct($finders, Party::class);
     }
 
     public function findOneByReference(Book $book, string $reference): ?Party

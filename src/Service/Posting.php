@@ -16,7 +16,7 @@ use Base\Ledger\Repository\EntryRepository;
 use Base\Ledger\Repository\FiscalYearRepository;
 use Base\Ledger\Repository\JournalRepository;
 use Base\Ledger\Repository\TaxRepository;
-use Doctrine\ORM\EntityManagerInterface;
+use Base\Contract\UnitOfWork;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\Lock\LockFactory;
 
@@ -36,7 +36,7 @@ use Symfony\Component\Lock\LockFactory;
 class Posting
 {
     public function __construct(
-        private readonly EntityManagerInterface $entityManager,
+        private readonly UnitOfWork $unitOfWork,
         private readonly AccountRepository $accounts,
         private readonly JournalRepository $journals,
         private readonly EntryRepository $entries,
@@ -94,7 +94,7 @@ class Posting
 
         $this->numbered($entry->getBook(), function () use ($entry) {
             $entry->validate($this->nextNumber($entry->getBook(), $entry->getDate()));
-            $this->entityManager->flush();
+            $this->unitOfWork->flush();
         });
 
         return $entry;
@@ -166,19 +166,19 @@ class Posting
         }
 
         foreach ($created as $account) {
-            $this->entityManager->persist($account);
+            $this->unitOfWork->persist($account);
         }
-        $this->entityManager->persist($entry);
+        $this->unitOfWork->persist($entry);
 
         if (!$validate) {
-            $this->entityManager->flush();
+            $this->unitOfWork->flush();
 
             return $entry;
         }
 
         $this->numbered($book, function () use ($entry, $book, $draft) {
             $entry->validate($this->nextNumber($book, $draft->date));
-            $this->entityManager->flush();
+            $this->unitOfWork->flush();
         });
 
         return $entry;

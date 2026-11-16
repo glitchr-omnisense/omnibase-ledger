@@ -47,6 +47,6 @@ class JournalCrudController extends AbstractCrudController
 
     public function isDeletable(object $entity): bool
     {
-        return null === $this->entityManager->getRepository(Entry::class)->findOneBy(['journal' => $entity]);
+        return null === $this->repositories->of(Entry::class)->findOneBy(['journal' => $entity]);
     }
 }

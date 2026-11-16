@@ -4,21 +4,27 @@ namespace Base\Ledger\Repository;
 
 use Base\Ledger\Entity\BankAccount;
 use Base\Ledger\Entity\BankRecurring;
-use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
-use Doctrine\Persistence\ManagerRegistry;
+use Base\Database\Attribute\Backend\Backends;
+use Base\Database\Backend\BulkDeletes;
+use Base\Database\Repository\Finder\Criterion;
+use Base\Database\Repository\Finder\Group;
+use Base\Database\Repository\Finder\Key;
+use Base\Database\Repository\Finder\Parser;
+use Base\Database\Repository\ServiceEntityRepository;
+use Base\Database\Repository\Finders;
 
 /** @extends ServiceEntityRepository<BankRecurring> */
 class BankRecurringRepository extends ServiceEntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
+    public function __construct(Finders $finders)
     {
-        parent::__construct($registry, BankRecurring::class);
+        parent::__construct($finders, BankRecurring::class);
     }
 
     /** Removes a bank account's rows: Bank\Aggregates writes them again. */
     public function deleteFor(BankAccount $account): void
     {
-        $this->createQueryBuilder('r')->delete()->andWhere('r.bankAccount = :account')->setParameter('account', $account)->getQuery()->execute();
+        Backends::of($this->unitOfWork(), BulkDeletes::class)->deleteWhere(BankRecurring::class, ['bankAccount' => $account]);
     }
 
     /**
@@ -32,9 +38,6 @@ class BankRecurringRepository extends ServiceEntityRepository
             return [];
         }
 
-        return $this->createQueryBuilder('r')
-            ->andWhere('r.bankAccount IN (:accounts)')->setParameter('accounts', $accounts)
-            ->orderBy('r.nextOn', 'ASC')
-            ->getQuery()->getResult();
+        return $this->findBy(['bankAccount' => Key::of(array_values($accounts))], ['nextOn' => 'ASC']);
     }
 }

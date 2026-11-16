@@ -13,7 +13,7 @@ use Base\Ledger\Entity\Account;
 use Base\Ledger\Entity\EntryLine;
 use Base\Ledger\Entity\Party;
 use Base\Ledger\Enum\PartyKind;
-use Omnibridge\Persistence\UnitOfWork;
+use Base\Contract\UnitOfWork;
 use Symfony\Component\Form\Extension\Core\Type\EnumType;
 
 /**
@@ -84,6 +84,6 @@ class PartyCrudController extends AbstractCrudController
 
     public function isDeletable(object $entity): bool
     {
-        return null === $this->entityManager->getRepository(EntryLine::class)->findOneBy(['party' => $entity]);
+        return null === $this->repositories->of(EntryLine::class)->findOneBy(['party' => $entity]);
     }
 }

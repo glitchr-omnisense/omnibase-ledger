@@ -7,7 +7,7 @@ use Base\Ledger\Entity\EntryLine;
 use Base\Ledger\Entity\Party;
 use Base\Ledger\Exception\LetteringException;
 use Base\Ledger\Repository\EntryLineRepository;
-use Doctrine\ORM\EntityManagerInterface;
+use Base\Contract\UnitOfWork;
 
 /**
  * Lettering: lines of one account and one party whose debits and credits
@@ -21,7 +21,7 @@ class Lettering
     private array $last = [];
 
     public function __construct(
-        private readonly EntityManagerInterface $entityManager,
+        private readonly UnitOfWork $unitOfWork,
         private readonly EntryLineRepository $lines,
     ) {
     }
@@ -71,7 +71,7 @@ class Lettering
         foreach ($lines as $line) {
             $line->setLetter($letter, $on);
         }
-        $this->entityManager->flush();
+        $this->unitOfWork->flush();
 
         return $letter;
     }
@@ -83,7 +83,7 @@ class Lettering
         foreach ($lines as $line) {
             $line->setLetter(null);
         }
-        $this->entityManager->flush();
+        $this->unitOfWork->flush();
 
         return \count($lines);
     }

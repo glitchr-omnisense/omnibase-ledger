@@ -133,7 +133,7 @@ class ReconcilerTest extends InMemoryLedger
         $dispatcher->addListener(\Base\Ledger\Event\BankLineUnreconciled::class, function (\Base\Ledger\Event\BankLineUnreconciled $event) use (&$events): void {
             $events[] = $event;
         });
-        $reconciler = new \Base\Ledger\Reconciliation\Reconciler($this->entityManager(), $this->posting(), $this->lettering(), $this->matcher(), $this->bankLineRepository(), 0.9, $dispatcher);
+        $reconciler = new \Base\Ledger\Reconciliation\Reconciler($this->unitOfWork(), $this->posting(), $this->lettering(), $this->matcher(), $this->bankLineRepository(), 0.9, $dispatcher);
         $entry = $reconciler->apply($line, $this->matcher()->suggest($line)[0]);
 
         $reconciler->undo($line);

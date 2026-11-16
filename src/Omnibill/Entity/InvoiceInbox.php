@@ -3,7 +3,7 @@
 namespace Base\Ledger\Omnibill\Entity;
 
 use Base\Ledger\Omnibill\Repository\InvoiceInboxRepository;
-use Doctrine\ORM\Mapping as ORM;
+use Base\Mapping as ORM;
 
 /**
  * Where receiving stopped on a gateway: the cursor its last receive() of the

@@ -4,26 +4,21 @@ namespace Base\Ledger\Repository;
 
 use Base\Ledger\Entity\BankAccount;
 use Base\Ledger\Entity\Book;
-use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
-use Doctrine\Persistence\ManagerRegistry;
+use Base\Database\Repository\ServiceEntityRepository;
+use Base\Database\Repository\Finders;
 
 /** @extends ServiceEntityRepository<BankAccount> */
 class BankAccountRepository extends ServiceEntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
+    public function __construct(Finders $finders)
     {
-        parent::__construct($registry, BankAccount::class);
+        parent::__construct($finders, BankAccount::class);
     }
 
     /** @return list<BankAccount> every bank account, or a book's */
     public function forBook(?Book $book = null): array
     {
-        $qb = $this->createQueryBuilder('a')->join('a.connection', 'c')->addSelect('c')->orderBy('a.id', 'ASC');
-        if (null !== $book) {
-            $qb->andWhere('c.book = :book')->setParameter('book', $book);
-        }
-
-        return $qb->getQuery()->getResult();
+        return $this->findBy(null === $book ? [] : ['connection.book' => $book], ['id' => 'ASC']);
     }
 
     /** The book's escrow account (BankAccount::isEscrow(): the third parties' money), the first one if several. */
@@ -40,8 +35,6 @@ class BankAccountRepository extends ServiceEntityRepository
 
     public function countForBook(Book $book): int
     {
-        return (int) $this->createQueryBuilder('a')->select('COUNT(a.id)')->join('a.connection', 'c')
-            ->andWhere('c.book = :book')->setParameter('book', $book)
-            ->getQuery()->getSingleScalarResult();
+        return $this->count(['connection.book' => $book]);
     }
 }

@@ -13,7 +13,7 @@ use Base\Ledger\Repository\BankLineRepository;
 use Base\Ledger\Repository\EntryRepository;
 use Base\Ledger\Repository\JournalRepository;
 use Base\Ledger\Service\Posting;
-use Doctrine\ORM\EntityManagerInterface;
+use Base\Contract\UnitOfWork;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 
 /**
@@ -30,7 +30,7 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 class Opening
 {
     public function __construct(
-        private readonly EntityManagerInterface $entityManager,
+        private readonly UnitOfWork $unitOfWork,
         private readonly Posting $posting,
         private readonly BankLineRepository $lines,
         private readonly EntryRepository $entries,
@@ -114,8 +114,8 @@ class Opening
         if ($current->isValidated()) {
             $this->posting->reverse($current, self::source($account, $n).':reversal', $current->getDate());
         } else {
-            $this->entityManager->remove($current);
-            $this->entityManager->flush();
+            $this->unitOfWork->remove($current);
+            $this->unitOfWork->flush();
         }
         if (0 === $opening['amount']) {
             return null;
@@ -163,15 +163,15 @@ class Opening
         $book = $account->getBook();
         $created = false;
         if (null === $this->accounts->findOneByNumber($book, $this->openingAccount)) {
-            $this->entityManager->persist(new Account($book, $this->openingAccount, 'Bilan d\'ouverture', AccountType::EQUITY));
+            $this->unitOfWork->persist(new Account($book, $this->openingAccount, 'Bilan d\'ouverture', AccountType::EQUITY));
             $created = true;
         }
         if (null === $this->journals->findOneByCode($book, $this->openingJournal)) {
-            $this->entityManager->persist(new Journal($book, $this->openingJournal, Journal::OPENING === $this->openingJournal ? 'À-nouveaux' : $this->openingJournal));
+            $this->unitOfWork->persist(new Journal($book, $this->openingJournal, Journal::OPENING === $this->openingJournal ? 'À-nouveaux' : $this->openingJournal));
             $created = true;
         }
         if ($created) {
-            $this->entityManager->flush();
+            $this->unitOfWork->flush();
         }
     }
 }

@@ -29,7 +29,7 @@ class OpeningTest extends InMemoryLedger
         $lines = $this->createStub(BankLineRepository::class);
         $lines->method('movements')->willReturnCallback(fn () => $this->movements);
 
-        return new Opening($this->entityManager(), $this->posting(), $lines, $this->entryRepository(), $this->accountRepository(), $this->journalRepository());
+        return new Opening($this->unitOfWork(), $this->posting(), $lines, $this->entryRepository(), $this->accountRepository(), $this->journalRepository());
     }
 
     private function move(string $date, int $amount): void
@@ -118,7 +118,7 @@ class OpeningTest extends InMemoryLedger
 
     private function connections(?BankAccountRepository $bankAccounts = null): Connections
     {
-        return new Connections($this->entityManager(), new StateCipher('s'), $this->accountRepository(), $this->journalRepository(),
+        return new Connections($this->unitOfWork(), new StateCipher('s'), $this->accountRepository(), $this->journalRepository(),
             $bankAccounts ?? $this->createStub(BankAccountRepository::class), $this->createStub(BankConnectionRepository::class), null, $this->entryLines());
     }
 

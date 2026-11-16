@@ -18,7 +18,7 @@ use Base\Ledger\Repository\BankAccountRepository;
 use Base\Ledger\Repository\BankConnectionRepository;
 use Base\Ledger\Repository\JournalRepository;
 use Base\Ledger\Security\StateCipher;
-use Doctrine\ORM\EntityManagerInterface;
+use Base\Contract\UnitOfWork;
 use Omnibank\GatewayInterface;
 use Omnibank\Model\Account as BankAccountModel;
 use Omnibank\Model\AccountKind;
@@ -36,7 +36,7 @@ use Omnibank\Registry;
 class Connections
 {
     public function __construct(
-        private readonly EntityManagerInterface $entityManager,
+        private readonly UnitOfWork $unitOfWork,
         private readonly StateCipher $cipher,
         private readonly AccountRepository $accounts,
         private readonly JournalRepository $journals,
@@ -46,6 +46,9 @@ class Connections
         private readonly ?EntryLineRepository $lines = null,
     ) {
     }
+
+    /** @var list<BankAccount> the bank accounts this service persisted, new until a flush writes them */
+    private array $pending = [];
 
     public function isAvailable(): bool
     {
@@ -104,8 +107,8 @@ class Connections
     {
         $this->gateway($gateway);
         $connection = new BankConnection($book, $gateway, $name);
-        $this->entityManager->persist($connection);
-        $this->entityManager->flush();
+        $this->unitOfWork->persist($connection);
+        $this->unitOfWork->flush();
 
         $url = $this->complete($connection, \is_callable($returnUrl) ? $returnUrl($connection) : $returnUrl);
 
@@ -139,7 +142,7 @@ class Connections
             throw $e;
         } catch (\Throwable $e) {
             $connection->setLastError($e->getMessage());
-            $this->entityManager->flush();
+            $this->unitOfWork->flush();
 
             throw new BankException($e->getMessage(), 0, $e);
         }
@@ -148,14 +151,14 @@ class Connections
         unset($state['return']);
         $this->store($connection, $result->connection->withState($state));
         $connection->setLastError(null);
-        $this->entityManager->flush();
+        $this->unitOfWork->flush();
 
         if (null !== $result->url) {
             return $result->url;
         }
         // Through: the accounts found, the access works; none yet, the provider is still reading the bank.
         $connection->setConnectionState($this->discover($connection) > 0 || !$connection->getAccounts()->isEmpty() ? ConnectionState::OK : ConnectionState::PENDING);
-        $this->entityManager->flush();
+        $this->unitOfWork->flush();
 
         return null;
     }
@@ -171,8 +174,8 @@ class Connections
         if (!$connection->isUnfinished()) {
             throw new BankException(sprintf('%s holds accounts or a consent: it is not removed.', $connection));
         }
-        $this->entityManager->remove($connection);
-        $this->entityManager->flush();
+        $this->unitOfWork->remove($connection);
+        $this->unitOfWork->flush();
     }
 
     /** Asks the bank for the connection's accounts and adds those the book does not have yet; returns how many. */
@@ -191,7 +194,7 @@ class Connections
                 ++$added;
             }
         }
-        $this->entityManager->flush();
+        $this->unitOfWork->flush();
 
         return $added;
     }
@@ -245,12 +248,13 @@ class Connections
         $journal = $this->journals->findOneByCode($book, $code);
         if (null === $journal) {
             $journal = new Journal($book, $code, 'Banque - '.$name);
-            $this->entityManager->persist($journal);
+            $this->unitOfWork->persist($journal);
         }
 
         $bankAccount = new BankAccount($connection, $externalId, $name, $ledgerAccount, $journal, $iban, $currency);
         $bankAccount->setKind($kind)->setProviderType($type);
-        $this->entityManager->persist($bankAccount);
+        $this->unitOfWork->persist($bankAccount);
+        $this->pending[] = $bankAccount;
 
         return $bankAccount;
     }
@@ -267,8 +271,9 @@ class Connections
         foreach ($this->bankAccounts->forBook($book) as $existing) {
             $taken[$existing->getAccount()->getNumber()] = true;
         }
-        foreach ($this->entityManager->getUnitOfWork()->getScheduledEntityInsertions() as $pending) {
-            if ($pending instanceof BankAccount) {
+        // The bank accounts persisted here and not written yet (what Doctrine's scheduled insertions held).
+        foreach ($this->pending as $pending) {
+            if ($this->unitOfWork->isNew($pending)) {
                 $taken[$pending->getAccount()->getNumber()] = true;
             }
         }
@@ -279,7 +284,7 @@ class Connections
         $account = $this->accounts->findOneByNumber($book, $number);
         if (null === $account) {
             $account = new Account($book, $number, $label.' - '.$name, '512' === $prefix ? AccountType::ASSET : AccountType::LIABILITY);
-            $this->entityManager->persist($account);
+            $this->unitOfWork->persist($account);
         }
 
         return $account;
@@ -301,7 +306,7 @@ class Connections
         }
         $book = $bankAccount->getBook();
         $target = $this->ledgerAccount($book, $bankAccount->getKind(), $bankAccount->getName());
-        $this->entityManager->flush();
+        $this->unitOfWork->flush();
 
         $balance = $this->lines?->balance($former) ?? 0;
         if (0 !== $balance) {
@@ -312,7 +317,7 @@ class Connections
                 : $draft->line($former->getNumber(), -$balance, 0)->line($target->getNumber(), 0, -$balance));
         }
         $bankAccount->setAccount($target);
-        $this->entityManager->flush();
+        $this->unitOfWork->flush();
 
         return $target;
     }

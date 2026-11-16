@@ -3,7 +3,7 @@
 namespace Base\Ledger\Entity;
 
 use Base\Ledger\Repository\BankDayRepository;
-use Doctrine\ORM\Mapping as ORM;
+use Base\Mapping as ORM;
 
 /**
  * One bank account's day, precomputed from its lines (Bank\Aggregates): what

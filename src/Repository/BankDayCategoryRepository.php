@@ -4,21 +4,27 @@ namespace Base\Ledger\Repository;
 
 use Base\Ledger\Entity\BankAccount;
 use Base\Ledger\Entity\BankDayCategory;
-use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
-use Doctrine\Persistence\ManagerRegistry;
+use Base\Database\Attribute\Backend\Backends;
+use Base\Database\Backend\BulkDeletes;
+use Base\Database\Repository\Finder\Criterion;
+use Base\Database\Repository\Finder\Group;
+use Base\Database\Repository\Finder\Key;
+use Base\Database\Repository\Finder\Parser;
+use Base\Database\Repository\ServiceEntityRepository;
+use Base\Database\Repository\Finders;
 
 /** @extends ServiceEntityRepository<BankDayCategory> */
 class BankDayCategoryRepository extends ServiceEntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
+    public function __construct(Finders $finders)
     {
-        parent::__construct($registry, BankDayCategory::class);
+        parent::__construct($finders, BankDayCategory::class);
     }
 
     /** Removes a bank account's rows: Bank\Aggregates writes them again. */
     public function deleteFor(BankAccount $account): void
     {
-        $this->createQueryBuilder('r')->delete()->andWhere('r.bankAccount = :account')->setParameter('account', $account)->getQuery()->execute();
+        Backends::of($this->unitOfWork(), BulkDeletes::class)->deleteWhere(BankDayCategory::class, ['bankAccount' => $account]);
     }
 
     /**
@@ -34,10 +40,12 @@ class BankDayCategoryRepository extends ServiceEntityRepository
             return [];
         }
 
-        return $this->createQueryBuilder('r')
-            ->andWhere('r.bankAccount IN (:accounts)')->setParameter('accounts', $accounts)
-            ->andWhere('r.day >= :from AND r.day <= :to')->setParameter('from', $from->setTime(0, 0))->setParameter('to', $to->setTime(0, 0))
-            ->orderBy('r.day', 'ASC')
-            ->getQuery()->getResult();
+        return $this->findBy([
+            'bankAccount' => Key::of(array_values($accounts)),
+            Group::of(Parser::SEPARATOR_AND,
+                Criterion::of('day', $from->setTime(0, 0), Parser::OPTION_GREATER_EQUAL),
+                Criterion::of('day', $to->setTime(0, 0), Parser::OPTION_LOWER_EQUAL),
+            ),
+        ], ['day' => 'ASC']);
     }
 }

@@ -11,7 +11,7 @@ use Base\Ledger\Enum\AccountType;
 use Base\Ledger\Repository\AccountRepository;
 use Base\Ledger\Repository\JournalRepository;
 use Base\Ledger\Service\Chart;
-use Doctrine\ORM\EntityManagerInterface;
+use Base\Contract\UnitOfWork;
 use PHPUnit\Framework\TestCase;
 
 class ChartTest extends TestCase
@@ -21,7 +21,7 @@ class ChartTest extends TestCase
 
     private function chart(array $existing = []): Chart
     {
-        $em = $this->createStub(EntityManagerInterface::class);
+        $em = $this->createStub(UnitOfWork::class);
         $em->method('persist')->willReturnCallback(function (object $entity) { $this->persisted[] = $entity; });
         $accounts = $this->createStub(AccountRepository::class);
         $accounts->method('chart')->willReturn($existing);

@@ -4,15 +4,15 @@ namespace Base\Ledger\Repository;
 
 use Base\Ledger\Entity\Account;
 use Base\Ledger\Entity\Book;
-use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
-use Doctrine\Persistence\ManagerRegistry;
+use Base\Database\Repository\ServiceEntityRepository;
+use Base\Database\Repository\Finders;
 
 /** @extends ServiceEntityRepository<Account> */
 class AccountRepository extends ServiceEntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
+    public function __construct(Finders $finders)
     {
-        parent::__construct($registry, Account::class);
+        parent::__construct($finders, Account::class);
     }
 
     public function findOneByNumber(Book $book, string $number): ?Account

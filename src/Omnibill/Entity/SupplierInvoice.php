@@ -7,7 +7,7 @@ use Base\Ledger\Entity\Entry;
 use Base\Ledger\Entity\Party;
 use Base\Ledger\Omnibill\Enum\SupplierInvoiceStatus;
 use Base\Ledger\Omnibill\Repository\SupplierInvoiceRepository;
-use Doctrine\ORM\Mapping as ORM;
+use Base\Mapping as ORM;
 
 /**
  * A supplier's invoice received by the book - through an omnisense/omnibill

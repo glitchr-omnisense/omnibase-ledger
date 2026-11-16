@@ -4,7 +4,7 @@ namespace Base\Ledger\Entity;
 
 use Base\Ledger\Enum\BankLineStatus;
 use Base\Ledger\Repository\BankLineRepository;
-use Doctrine\ORM\Mapping as ORM;
+use Base\Mapping as ORM;
 use Omnibank\Model\TransactionCategory;
 
 /**

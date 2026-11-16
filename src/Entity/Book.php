@@ -4,7 +4,7 @@ namespace Base\Ledger\Entity;
 
 use Base\Ledger\Enum\VatRegime;
 use Base\Ledger\Repository\BookRepository;
-use Doctrine\ORM\Mapping as ORM;
+use Base\Mapping as ORM;
 use Symfony\Component\Validator\Constraints as Assert;
 
 /**

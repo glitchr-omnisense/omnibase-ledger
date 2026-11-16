@@ -21,11 +21,11 @@ use Base\Ledger\Entity\ReconciliationRule;
 use Base\Ledger\Enum\AccountType;
 use Base\Ledger\Enum\PartyKind;
 use Base\Ledger\Enum\RuleSign;
-use Doctrine\ORM\Mapping as ORM;
-use Omnibridge\Symfony\Omnibase\Field\Type\AssociationType;
+use Base\Mapping as ORM;
+use Base\Field\Type\AssociationType;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
-use Symfony\Bridge\Doctrine\Form\Type\EntityType;
+use Base\Field\Type\SelectType;
 use Symfony\Component\Form\Extension\Core\Type\EnumType;
 use Symfony\Component\Form\Extension\Core\Type\FormType;
 use Symfony\Component\Form\Forms;
@@ -82,7 +82,7 @@ class CrudFormsTest extends TestCase
                     if (is_a((string) $field->getFormType(), AssociationType::class, true)) {
                         self::assertSame([], self::enumsOf($target), $where.': AssociationType embeds '.$target.'\'s form, whose enum it prints in a text input');
                     } else {
-                        self::assertSame(EntityType::class, $field->getFormType(), $where);
+                        self::assertSame(SelectType::class, $field->getFormType(), $where);
                         self::assertSame($target, $field->getFormTypeOption('class'), $where);
                     }
                 }
@@ -94,10 +94,10 @@ class CrudFormsTest extends TestCase
     {
         $fields = self::formFields(ReconciliationRuleCrudController::class)[FieldDescriptor::PAGE_NEW];
 
-        self::assertSame(EntityType::class, $fields['account']->getFormType());
+        self::assertSame(SelectType::class, $fields['account']->getFormType());
         self::assertSame(Account::class, $fields['account']->getFormTypeOption('class'));
         self::assertTrue($fields['account']->isRequired());
-        self::assertSame(EntityType::class, $fields['party']->getFormType());
+        self::assertSame(SelectType::class, $fields['party']->getFormType());
         self::assertSame(Party::class, $fields['party']->getFormTypeOption('class'));
         self::assertFalse($fields['party']->isRequired(), 'a rule may name no party');
 

@@ -81,7 +81,7 @@ class ReceiptsTest extends InMemoryLedger
 
     private function receipts(): Receipts
     {
-        return new Receipts($this->entityManager(), 'Comptabilité/Justificatifs', 'staff', $this->directory);
+        return new Receipts($this->unitOfWork(), 'Comptabilité/Justificatifs', 'staff', $this->directory);
     }
 
     private function upload(string $content, string $name): UploadedFile

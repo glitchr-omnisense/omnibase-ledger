@@ -5,7 +5,7 @@ namespace Base\Ledger\Entity;
 use Base\Ledger\Repository\EntryRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
-use Doctrine\ORM\Mapping as ORM;
+use Base\Mapping as ORM;
 
 /**
  * A journal entry: balanced lines (debits = credits) on one date, in one

@@ -78,6 +78,6 @@ class BookCrudController extends AbstractCrudController
     /** A book with entries is part of the accounts: it stays. */
     public function isDeletable(object $entity): bool
     {
-        return null === $this->entityManager->getRepository(Entry::class)->findOneBy(['book' => $entity]);
+        return null === $this->repositories->of(Entry::class)->findOneBy(['book' => $entity]);
     }
 }

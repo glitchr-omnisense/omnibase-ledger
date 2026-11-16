@@ -4,8 +4,8 @@ namespace Base\Ledger\Entity;
 
 use Base\Ledger\Enum\AccountType;
 use Base\Ledger\Repository\AccountRepository;
-use Doctrine\ORM\Mapping as ORM;
-use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
+use Base\Mapping as ORM;
+use Base\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Validator\Constraints as Assert;
 
 /**

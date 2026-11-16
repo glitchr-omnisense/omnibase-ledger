@@ -63,6 +63,6 @@ class VatCodeCrudController extends AbstractCrudController
 
     public function isDeletable(object $entity): bool
     {
-        return null === $this->entityManager->getRepository(EntryLine::class)->findOneBy(['tax' => $entity]);
+        return null === $this->repositories->of(EntryLine::class)->findOneBy(['tax' => $entity]);
     }
 }

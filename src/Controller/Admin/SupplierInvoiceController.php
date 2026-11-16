@@ -162,7 +162,7 @@ class SupplierInvoiceController extends AbstractLedgerPageController
         }
         $party = null;
         if ('' !== ($partyId = (string) $request->request->get('party')) && 'new' !== $partyId) {
-            $party = $this->entityManager->find(Party::class, (int) $partyId);
+            $party = $this->repositories->of(Party::class)->find((int) $partyId);
             if (!$party instanceof Party || $party->getBook() !== $invoice->getBook()) {
                 throw $this->createNotFoundException();
             }

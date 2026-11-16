@@ -3,7 +3,7 @@
 namespace Base\Ledger\Entity;
 
 use Base\Ledger\Repository\BankRecurringRepository;
-use Doctrine\ORM\Mapping as ORM;
+use Base\Mapping as ORM;
 use Omnibank\Model\TransactionCategory;
 
 /**

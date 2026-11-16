@@ -8,7 +8,7 @@ use Base\Ledger\Entity\Party;
 use Base\Ledger\Enum\PartyKind;
 use Base\Ledger\Repository\AccountRepository;
 use Base\Ledger\Repository\PartyRepository;
-use Doctrine\ORM\EntityManagerInterface;
+use Base\Contract\UnitOfWork;
 
 /**
  * The book's parties as the application knows them: partyFor() finds one by
@@ -23,7 +23,7 @@ class Parties
     private array $created = [];
 
     public function __construct(
-        private readonly EntityManagerInterface $entityManager,
+        private readonly UnitOfWork $unitOfWork,
         private readonly PartyRepository $parties,
         private readonly AccountRepository $accounts,
     ) {
@@ -52,7 +52,7 @@ class Parties
                 $changed = true;
             }
             if ($changed) {
-                $this->entityManager->flush();
+                $this->unitOfWork->flush();
             }
 
             return $party;
@@ -63,12 +63,12 @@ class Parties
         if (null === $account) {
             $collective = $this->accounts->findOneByNumber($book, $kind->collective());
             $account = new Account($book, $number, $name, $collective?->getType());
-            $this->entityManager->persist($account);
+            $this->unitOfWork->persist($account);
         }
 
         $party = new Party($book, $kind, $name, $number, $reference, $iban);
-        $this->entityManager->persist($party);
-        $this->entityManager->flush();
+        $this->unitOfWork->persist($party);
+        $this->unitOfWork->flush();
 
         return $this->created[$key] = $party;
     }

@@ -8,8 +8,7 @@ use Base\Admin\Config\Crud;
 use Base\Field\AssociationField;
 use Base\Ledger\Entity\Book;
 use Base\Ledger\Security\Voter\LedgerVoter;
-use Doctrine\ORM\EntityRepository;
-use Symfony\Bridge\Doctrine\Form\Type\EntityType;
+use Base\Field\Type\SelectType;
 
 /**
  * The ledger screens' permissions (LedgerVoter), for every ledger CRUD:
@@ -35,18 +34,22 @@ trait LedgerAdminTrait
     /** The book a new record belongs to until the form says otherwise: the first one. */
     protected function defaultBook(): Book
     {
-        return $this->entityManager->getRepository(Book::class)->findOneBy([], ['id' => 'ASC'])
+        return $this->repositories->of(Book::class)->findOneBy([], ['id' => 'ASC'])
             ?? throw $this->createNotFoundException('Create a book first (Ledger > Books).');
     }
 
     /**
      * A record of the ledger another one points to (a rule's account and
      * party, a bank account's ledger account and journal), chosen in the list
-     * of its kind - Symfony's EntityType, each book's under its name, in the
-     * order of $sort. AssociationType, the field's own form, embeds the
-     * related record's whole form instead: an account is not renamed from a
-     * rule, and that form does not open on a record that holds a PHP enum
-     * (Account::$type, Party::$kind).
+     * of its kind - omnibase's SelectType over the class, read through the
+     * repositories on whichever persistence. AssociationType, the field's own
+     * form, embeds the related record's whole form instead: an account is not
+     * renamed from a rule, and that form does not open on a record that holds
+     * a PHP enum (Account::$type, Party::$kind).
+     *
+     * $sort is kept for the callers: SelectType has no order nor group option
+     * yet (asked of the framework agent: each book's records under its name, in
+     * the order of $sort, as Symfony's EntityType listed them).
      *
      * @param class-string $class an entity with a book
      */
@@ -54,28 +57,20 @@ trait LedgerAdminTrait
     {
         return AssociationField::new($property, $label)
             ->setRequired($required)
-            ->setFormType(EntityType::class)
-            ->setFormTypeOptions([
-                'class' => $class,
-                'query_builder' => fn (EntityRepository $repository) => $repository->createQueryBuilder('e')
-                    ->join('e.book', 'b')->addSelect('b')->orderBy('b.id', 'ASC')->addOrderBy('e.'.$sort, 'ASC'),
-                'group_by' => fn (object $record) => (string) $record->getBook(),
-            ] + ($required ? [] : ['placeholder' => '']));
+            ->setFormType(SelectType::class)
+            ->setFormTypeOptions(['class' => $class] + ($required ? [] : ['placeholder' => '']));
     }
 
     /**
-     * A record's book, chosen in the list of books (EntityType):
+     * A record's book, chosen in the list of books (SelectType; by name once it sorts):
      * AssociationType would embed the book's own form, whose VAT regime (an
      * enum) it cannot render.
      */
     protected function bookField(string $label = 'Livre'): AssociationField
     {
         return AssociationField::new('book', $label)
-            ->setFormType(EntityType::class)
-            ->setFormTypeOptions([
-                'class' => Book::class,
-                'query_builder' => fn (EntityRepository $repository) => $repository->createQueryBuilder('b')->orderBy('b.name', 'ASC'),
-            ]);
+            ->setFormType(SelectType::class)
+            ->setFormTypeOptions(['class' => Book::class]);
     }
 
     /** A token in an action's link, as for a logout: a link from elsewhere, a prefetch, does nothing. */

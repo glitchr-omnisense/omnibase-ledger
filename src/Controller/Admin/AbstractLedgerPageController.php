@@ -6,7 +6,8 @@ use Base\Admin\Context\AdminContext;
 use Base\Admin\Menu\MenuBuilder;
 use Base\Ledger\Entity\Book;
 use Base\Ledger\Security\Voter\LedgerVoter;
-use Doctrine\ORM\EntityManagerInterface;
+use Base\Contract\UnitOfWork;
+use Base\Database\Repository\Repositories;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\RedirectResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -20,14 +21,16 @@ use Symfony\Contracts\Service\Attribute\Required;
  */
 abstract class AbstractLedgerPageController extends AbstractController
 {
-    protected EntityManagerInterface $entityManager;
+    protected UnitOfWork $unitOfWork;
+    protected Repositories $repositories;
     private AdminContext $adminContext;
     private MenuBuilder $menuBuilder;
 
     #[Required]
-    public function setLedgerServices(EntityManagerInterface $entityManager, AdminContext $adminContext, MenuBuilder $menuBuilder): void
+    public function setLedgerServices(UnitOfWork $unitOfWork, Repositories $repositories, AdminContext $adminContext, MenuBuilder $menuBuilder): void
     {
-        $this->entityManager = $entityManager;
+        $this->unitOfWork = $unitOfWork;
+        $this->repositories = $repositories;
         $this->adminContext = $adminContext;
         $this->menuBuilder = $menuBuilder;
     }
@@ -53,7 +56,7 @@ abstract class AbstractLedgerPageController extends AbstractController
      */
     protected function load(string $class, int $id, string $attribute = LedgerVoter::VIEW): object
     {
-        $entity = $this->entityManager->find($class, $id) ?? throw $this->createNotFoundException();
+        $entity = $this->repositories->of($class)->find($id) ?? throw $this->createNotFoundException();
         $this->denyAccessUnlessGranted($attribute, $entity);
 
         return $entity;
@@ -63,7 +66,7 @@ abstract class AbstractLedgerPageController extends AbstractController
     protected function bookFrom(Request $request, string $attribute = LedgerVoter::VIEW): Book
     {
         $id = $request->query->getInt('book');
-        $book = $id > 0 ? $this->entityManager->find(Book::class, $id) : $this->entityManager->getRepository(Book::class)->findOneBy([], ['id' => 'ASC']);
+        $book = $id > 0 ? $this->repositories->of(Book::class)->find($id) : $this->repositories->of(Book::class)->findOneBy([], ['id' => 'ASC']);
         if (null === $book) {
             throw $this->createNotFoundException('No book: create one first.');
         }

@@ -7,7 +7,7 @@ use Base\Ledger\Entity\BankConnection;
 use Base\Ledger\Enum\ConsentState;
 use Base\Ledger\Exception\BankException;
 use Base\Ledger\Exception\LedgerException;
-use Doctrine\ORM\EntityManagerInterface;
+use Base\Contract\UnitOfWork;
 use Omnibank\Model\Account as BankAccountModel;
 use Omnibank\Model\Connection;
 use Omnibank\Model\ConnectionState;
@@ -24,7 +24,7 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 class Sync
 {
     public function __construct(
-        private readonly EntityManagerInterface $entityManager,
+        private readonly UnitOfWork $unitOfWork,
         private readonly Connections $connections,
         private readonly Importer $importer,
         #[Autowire('%ledger.bank.sync_overlap_days%')] private readonly int $overlapDays = 5,
@@ -63,7 +63,7 @@ class Sync
         } catch (BankException $e) {
             $connection->setLastError($e->getMessage());
             $connection->setConnectionState(ConnectionState::ofFailure($e), $now);
-            $this->entityManager->flush();
+            $this->unitOfWork->flush();
 
             throw $e;
         } catch (\Throwable $e) {
@@ -76,7 +76,7 @@ class Sync
             if (self::isConsentError($e) || $state->needsUser()) {
                 $connection->setConsentStatus(ConsentState::NEEDS_RENEWAL);
             }
-            $this->entityManager->flush();
+            $this->unitOfWork->flush();
 
             throw new BankException(sprintf('%s: %s', $connection, $e->getMessage()), 0, $e);
         }
@@ -85,7 +85,7 @@ class Sync
         $connection->setLastError(null);
         // The gateway's own word for the access when it gives one with the account (Powens' error), else it went through.
         $connection->setConnectionState($model->state ?? ConnectionState::OK, $now);
-        $this->entityManager->flush();
+        $this->unitOfWork->flush();
         $this->openOnce($account);
         $this->aggregates?->rebuild($account);
 
@@ -134,7 +134,7 @@ class Sync
     {
         $connection->setConsentStatus(ConsentState::REVOKED === ConsentState::of($omnibank->consent->status) ? ConsentState::REVOKED : ConsentState::NEEDS_RENEWAL);
         $connection->setLastError($message);
-        $this->entityManager->flush();
+        $this->unitOfWork->flush();
     }
 
     /** A provider's refusal that a new consent would cure (expired, SCA, 401/403). */

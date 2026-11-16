@@ -34,11 +34,11 @@ class StatementUploadTest extends InMemoryLedger
 
     private function upload(): StatementUpload
     {
-        $connections = new Connections($this->entityManager(), new StateCipher('s'), $this->accountRepository(), $this->journalRepository(),
+        $connections = new Connections($this->unitOfWork(), new StateCipher('s'), $this->accountRepository(), $this->journalRepository(),
             $this->createStub(BankAccountRepository::class), $this->createStub(BankConnectionRepository::class),
             new Registry([new FilesGatewayFactory()], ['files' => ['factory' => 'files']]));
 
-        return new StatementUpload($this->entityManager(), $connections, new Importer($this->entityManager(), $this->bankLineRepository()));
+        return new StatementUpload($this->unitOfWork(), $connections, new Importer($this->unitOfWork(), $this->bankLineRepository()));
     }
 
     private function fileAccount(string $iban): BankAccount

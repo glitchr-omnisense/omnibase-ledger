@@ -22,7 +22,8 @@ use Base\Ledger\Model\Text;
 use Base\Ledger\Repository\AccountRepository;
 use Base\Ledger\Repository\BankAccountRepository;
 use Base\Ledger\Repository\BankLineRepository;
-use Doctrine\ORM\EntityManagerInterface;
+use Base\Contract\UnitOfWork;
+use Base\Database\Repository\Repositories;
 use Symfony\Component\Security\Core\Exception\AccessDeniedException;
 
 /**
@@ -42,7 +43,8 @@ class Desk
     private array $openItems = [];
 
     public function __construct(
-        private readonly EntityManagerInterface $entityManager,
+        private readonly UnitOfWork $unitOfWork,
+        private readonly Repositories $repositories,
         private readonly Matcher $matcher,
         private readonly Reconciler $reconciler,
         private readonly BankLineRepository $bankLines,
@@ -99,13 +101,13 @@ class Desk
         $book = $line->getBook();
         $picked = [];
         foreach ($items as $id) {
-            $item = $this->entityManager->find(EntryLine::class, (int) $id);
+            $item = $this->repositories->of(EntryLine::class)->find((int) $id);
             if (null !== $item && $item->getBook() === $book) {
                 $picked[] = $item;
             }
         }
-        $rule = null !== $rule && $rule > 0 ? $this->entityManager->find(ReconciliationRule::class, $rule) : null;
-        $party = null !== $party && $party > 0 ? $this->entityManager->find(Party::class, $party) : null;
+        $rule = null !== $rule && $rule > 0 ? $this->repositories->of(ReconciliationRule::class)->find($rule) : null;
+        $party = null !== $party && $party > 0 ? $this->repositories->of(Party::class)->find($party) : null;
         if ((null !== $rule && $rule->getBook() !== $book) || (null !== $party && $party->getBook() !== $book)) {
             throw new AccessDeniedException('Not of this book.');
         }
@@ -152,13 +154,13 @@ class Desk
             if ($amount <= 0) {
                 continue;
             }
-            $party = !empty($part['party']) ? $this->entityManager->find(Party::class, (int) $part['party']) : null;
+            $party = !empty($part['party']) ? $this->repositories->of(Party::class)->find((int) $part['party']) : null;
             if (null !== $party && $party->getBook() !== $book) {
                 throw new AccessDeniedException('Not of this book.');
             }
             $items = [];
             foreach ($part['items'] ?? [] as $id) {
-                $item = $this->entityManager->find(EntryLine::class, (int) $id);
+                $item = $this->repositories->of(EntryLine::class)->find((int) $id);
                 if (null !== $item && $item->getBook() === $book && !$item->isLettered()) {
                     $items[] = $item;
                 }
@@ -212,8 +214,8 @@ class Desk
         if (null !== ($code = self::code($tax))) {
             $rule->setSplit([['account' => $target->getNumber(), 'rest' => true, 'tax' => $code]]);
         }
-        $this->entityManager->persist($rule);
-        $this->entityManager->flush();
+        $this->unitOfWork->persist($rule);
+        $this->unitOfWork->flush();
 
         return ['rule' => $rule, 'applied' => $this->applyRule($rule)];
     }
@@ -254,8 +256,8 @@ class Desk
     {
         $undone = $this->undoLines($rule->getBook(), $lines);
         if ($remove) {
-            $this->entityManager->remove($rule);
-            $this->entityManager->flush();
+            $this->unitOfWork->remove($rule);
+            $this->unitOfWork->flush();
         }
 
         return $undone;
@@ -275,7 +277,7 @@ class Desk
             $before = array_map(fn (BankLine $line) => $line->getId(), $this->bankLines->pending($account));
             $this->reconciler->autoReconcile($account);
             foreach ($before as $id) {
-                $line = $this->entityManager->find(BankLine::class, $id);
+                $line = $this->repositories->of(BankLine::class)->find($id);
                 if (null !== $line && BankLineStatus::RECONCILED === $line->getStatus()) {
                     $applied[] = $line;
                 }
@@ -296,7 +298,7 @@ class Desk
     {
         $undone = 0;
         foreach (array_reverse($ids) as $id) {
-            $line = $this->entityManager->find(BankLine::class, (int) $id);
+            $line = $this->repositories->of(BankLine::class)->find((int) $id);
             if (null === $line || $line->getBook() !== $book || $line->getStatus()->isPending()) {
                 continue;
             }
@@ -357,22 +359,22 @@ class Desk
         $removed = 0;
         $touched = [];
         foreach ($added as $id) {
-            $line = $this->entityManager->find(BankLine::class, (int) $id);
+            $line = $this->repositories->of(BankLine::class)->find((int) $id);
             if (null === $line || $line->getBook() !== $book || !$line->getStatus()->isPending()) {
                 continue;
             }
             $touched[$line->getBankAccount()->getId()] = $line->getBankAccount();
-            $this->entityManager->remove($line);
+            $this->unitOfWork->remove($line);
             ++$removed;
         }
         foreach ($synced as $id => $at) {
-            $account = $this->entityManager->find(BankAccount::class, (int) $id);
+            $account = $this->repositories->of(BankAccount::class)->find((int) $id);
             if (null !== $account && $account->getBook() === $book) {
                 $account->setLastSyncedAt(null === $at || '' === $at ? null : new \DateTimeImmutable($at));
                 $touched[$account->getId()] = $account;
             }
         }
-        $this->entityManager->flush();
+        $this->unitOfWork->flush();
         foreach ($touched as $account) {
             $this->aggregates?->rebuild($account);
         }

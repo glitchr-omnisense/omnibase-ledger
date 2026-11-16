@@ -3,15 +3,15 @@
 namespace Base\Ledger\Repository;
 
 use Base\Ledger\Entity\Book;
-use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
-use Doctrine\Persistence\ManagerRegistry;
+use Base\Database\Repository\ServiceEntityRepository;
+use Base\Database\Repository\Finders;
 
 /** @extends ServiceEntityRepository<Book> */
 class BookRepository extends ServiceEntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
+    public function __construct(Finders $finders)
     {
-        parent::__construct($registry, Book::class);
+        parent::__construct($finders, Book::class);
     }
 
     /** A book by its id, SIREN or exact name: what the commands accept. */

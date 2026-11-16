@@ -10,7 +10,7 @@ use Base\Ledger\Repository\BankDayCategoryRepository;
 use Base\Ledger\Repository\BankDayRepository;
 use Base\Ledger\Repository\BankLineRepository;
 use Base\Ledger\Repository\BankRecurringRepository;
-use Doctrine\ORM\EntityManagerInterface;
+use Base\Contract\UnitOfWork;
 
 /**
  * Writes a bank account's precomputed rows (Aggregator) again from its
@@ -21,7 +21,7 @@ use Doctrine\ORM\EntityManagerInterface;
 class Aggregates
 {
     public function __construct(
-        private readonly EntityManagerInterface $entityManager,
+        private readonly UnitOfWork $unitOfWork,
         private readonly BankLineRepository $lines,
         private readonly BankAccountRepository $bankAccounts,
         private readonly BankDayRepository $days,
@@ -42,10 +42,10 @@ class Aggregates
         $this->recurring->deleteFor($account);
         foreach ($rows as $list) {
             foreach ($list as $row) {
-                $this->entityManager->persist($row);
+                $this->unitOfWork->persist($row);
             }
         }
-        $this->entityManager->flush();
+        $this->unitOfWork->flush();
 
         return array_map('count', $rows);
     }

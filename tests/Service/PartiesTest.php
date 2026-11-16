@@ -11,7 +11,7 @@ class PartiesTest extends InMemoryLedger
 {
     private function parties(): Parties
     {
-        return new Parties($this->entityManager(), $this->partyRepository(), $this->accountRepository());
+        return new Parties($this->unitOfWork(), $this->partyRepository(), $this->accountRepository());
     }
 
     public function testAPartyIsCreatedOnceWithItsAuxiliaryAccount(): void

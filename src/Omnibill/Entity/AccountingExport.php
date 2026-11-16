@@ -5,7 +5,7 @@ namespace Base\Ledger\Omnibill\Entity;
 use Base\Ledger\Entity\Book;
 use Base\Ledger\Omnibill\Enum\ExportState;
 use Base\Ledger\Omnibill\Repository\AccountingExportRepository;
-use Doctrine\ORM\Mapping as ORM;
+use Base\Mapping as ORM;
 
 /**
  * One export of a book's period to the accountant's software (an

@@ -4,15 +4,15 @@ namespace Base\Ledger\Repository;
 
 use Base\Ledger\Entity\Book;
 use Base\Ledger\Entity\ReconciliationRule;
-use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
-use Doctrine\Persistence\ManagerRegistry;
+use Base\Database\Repository\ServiceEntityRepository;
+use Base\Database\Repository\Finders;
 
 /** @extends ServiceEntityRepository<ReconciliationRule> */
 class ReconciliationRuleRepository extends ServiceEntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
+    public function __construct(Finders $finders)
     {
-        parent::__construct($registry, ReconciliationRule::class);
+        parent::__construct($finders, ReconciliationRule::class);
     }
 
     /** @return list<ReconciliationRule> a book's enabled rules, highest priority first */

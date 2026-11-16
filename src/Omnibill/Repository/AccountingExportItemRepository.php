@@ -6,15 +6,16 @@ use Base\Ledger\Entity\Book;
 use Base\Ledger\Omnibill\Entity\AccountingExport;
 use Base\Ledger\Omnibill\Entity\AccountingExportItem;
 use Base\Ledger\Omnibill\Enum\ExportState;
-use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
-use Doctrine\Persistence\ManagerRegistry;
+use Base\Database\Repository\Finder\Key;
+use Base\Database\Repository\ServiceEntityRepository;
+use Base\Database\Repository\Finders;
 
 /** @extends ServiceEntityRepository<AccountingExportItem> */
 class AccountingExportItemRepository extends ServiceEntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
+    public function __construct(Finders $finders)
     {
-        parent::__construct($registry, AccountingExportItem::class);
+        parent::__construct($finders, AccountingExportItem::class);
     }
 
     public function findOneByKey(Book $book, string $gateway, string $kind, string $key): ?AccountingExportItem
@@ -30,15 +31,15 @@ class AccountingExportItemRepository extends ServiceEntityRepository
      */
     public function attention(Book $book, ?string $gateway = null, int $limit = 200): array
     {
-        $qb = $this->createQueryBuilder('i')
-            ->andWhere('i.book = :book')->setParameter('book', $book)
-            ->andWhere('i.state IN (:states)')->setParameter('states', [ExportState::REFUSED->value, ExportState::FAILED->value, ExportState::UNKNOWN->value, ExportState::CHANGED->value])
-            ->orderBy('i.updatedAt', 'DESC')->setMaxResults($limit);
+        $criteria = [
+            'book' => Key::of($book),
+            'state' => [ExportState::REFUSED, ExportState::FAILED, ExportState::UNKNOWN, ExportState::CHANGED],
+        ];
         if (null !== $gateway) {
-            $qb->andWhere('i.gateway = :gateway')->setParameter('gateway', $gateway);
+            $criteria['gateway'] = $gateway;
         }
 
-        return $qb->getQuery()->getResult();
+        return $this->findBy($criteria, ['updatedAt' => 'DESC'], $limit);
     }
 
     /** @return list<AccountingExportItem> what a run touched */

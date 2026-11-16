@@ -3,8 +3,8 @@
 namespace Base\Ledger\Entity;
 
 use Base\Ledger\Repository\FiscalYearRepository;
-use Doctrine\ORM\Mapping as ORM;
-use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
+use Base\Mapping as ORM;
+use Base\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Validator\Constraints as Assert;
 use Symfony\Component\Validator\Context\ExecutionContextInterface;
 

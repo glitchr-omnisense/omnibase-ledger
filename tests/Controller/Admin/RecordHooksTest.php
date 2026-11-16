@@ -11,7 +11,7 @@ use Base\Ledger\Entity\Account;
 use Base\Ledger\Entity\Book;
 use Base\Ledger\Entity\Party;
 use Base\Ledger\Enum\PartyKind;
-use Omnibridge\Persistence\UnitOfWork;
+use Base\Contract\UnitOfWork;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -31,7 +31,7 @@ final class RecordHooksTest extends TestCase
                 continue;
             }
             foreach (['persist', 'update', 'delete', 'remove'] as $hook) {
-                self::assertSame(AbstractCrudController::class, (new \ReflectionMethod($class, $hook.'Entity'))->getDeclaringClass()->getName(), "$class::{$hook}Entity()");
+                self::assertFalse(method_exists($class, $hook.'Entity'), "$class::{$hook}Entity(): the admin has no entity-manager hook any more");
             }
         }
     }
@@ -49,11 +49,11 @@ final class RecordHooksTest extends TestCase
         });
         $unitOfWork->expects(self::once())->method('flush');
 
-        $accounts = $this->createMock(Entities::class);
+        $accounts = $this->createStub(Entities::class);
         $accounts->method('findOneBy')->willReturnCallback(static fn (array $criteria) => '401' === $criteria['number'] ? $collective : null);
-        $parties = $this->createMock(Entities::class);
+        $parties = $this->createStub(Entities::class);
         $parties->method('findOneBy')->willReturn(null);
-        $repositories = $this->createMock(Repositories::class);
+        $repositories = $this->createStub(Repositories::class);
         $repositories->method('of')->willReturnCallback(static fn (string $class) => Account::class === $class ? $accounts : $parties);
         Backends::register($unitOfWork::class, Repositories::class, static fn () => $repositories);
 

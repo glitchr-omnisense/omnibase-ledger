@@ -25,7 +25,7 @@ class ImporterTest extends InMemoryLedger
 
     public function testEachTransactionBecomesOneLineOnce(): void
     {
-        $importer = new Importer($this->entityManager(), $this->bankLineRepository());
+        $importer = new Importer($this->unitOfWork(), $this->bankLineRepository());
         $account = $this->bankAccount();
 
         self::assertSame(2, $importer->import($account, [self::transaction('t1', 85000), self::transaction('t2', -1250, 'FRAIS'), self::transaction('t1', 85000)]));

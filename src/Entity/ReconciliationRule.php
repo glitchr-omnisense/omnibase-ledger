@@ -5,7 +5,7 @@ namespace Base\Ledger\Entity;
 use Base\Ledger\Enum\RuleSign;
 use Base\Ledger\Model\Text;
 use Base\Ledger\Repository\ReconciliationRuleRepository;
-use Doctrine\ORM\Mapping as ORM;
+use Base\Mapping as ORM;
 use Symfony\Component\Validator\Constraints as Assert;
 
 /**

@@ -4,7 +4,7 @@ namespace Base\Ledger\Bank;
 
 use Base\Ledger\Entity\BankAccount;
 use Base\Ledger\Exception\BankException;
-use Doctrine\ORM\EntityManagerInterface;
+use Base\Contract\UnitOfWork;
 use Omnibank\Model\Account as BankAccountModel;
 use Omnibank\Model\AccountKind;
 use Omnibank\Model\Connection;
@@ -23,7 +23,7 @@ class StatementUpload
     public const GATEWAY = 'files';
 
     public function __construct(
-        private readonly EntityManagerInterface $entityManager,
+        private readonly UnitOfWork $unitOfWork,
         private readonly Connections $connections,
         private readonly Importer $importer,
         private readonly ?Aggregates $aggregates = null,
@@ -70,7 +70,7 @@ class StatementUpload
         }
         $account->setLastSyncedAt(new \DateTimeImmutable());
         $account->getConnection()->setConnectionState(ConnectionState::OK);
-        $this->entityManager->flush();
+        $this->unitOfWork->flush();
         try {
             $this->opening?->open($account);
         } catch (\Base\Ledger\Exception\LedgerException) {

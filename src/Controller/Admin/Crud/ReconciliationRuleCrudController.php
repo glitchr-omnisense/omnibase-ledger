@@ -69,7 +69,7 @@ class ReconciliationRuleCrudController extends AbstractCrudController
     public function createEntity(string $entityFqcn): object
     {
         $book = $this->defaultBook();
-        $accounts = $this->entityManager->getRepository(Account::class);
+        $accounts = $this->repositories->of(Account::class);
         $account = $accounts->findOneBy(['book' => $book, 'number' => '627']) ?? $accounts->findOneBy(['book' => $book], ['number' => 'ASC'])
             ?? throw $this->createNotFoundException('Seed the book\'s chart of accounts first.');
 

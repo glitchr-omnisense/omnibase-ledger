@@ -4,21 +4,27 @@ namespace Base\Ledger\Repository;
 
 use Base\Ledger\Entity\BankAccount;
 use Base\Ledger\Entity\BankCounterpartyMonth;
-use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
-use Doctrine\Persistence\ManagerRegistry;
+use Base\Database\Attribute\Backend\Backends;
+use Base\Database\Backend\BulkDeletes;
+use Base\Database\Repository\Finder\Criterion;
+use Base\Database\Repository\Finder\Group;
+use Base\Database\Repository\Finder\Key;
+use Base\Database\Repository\Finder\Parser;
+use Base\Database\Repository\ServiceEntityRepository;
+use Base\Database\Repository\Finders;
 
 /** @extends ServiceEntityRepository<BankCounterpartyMonth> */
 class BankCounterpartyMonthRepository extends ServiceEntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
+    public function __construct(Finders $finders)
     {
-        parent::__construct($registry, BankCounterpartyMonth::class);
+        parent::__construct($finders, BankCounterpartyMonth::class);
     }
 
     /** Removes a bank account's rows: Bank\Aggregates writes them again. */
     public function deleteFor(BankAccount $account): void
     {
-        $this->createQueryBuilder('r')->delete()->andWhere('r.bankAccount = :account')->setParameter('account', $account)->getQuery()->execute();
+        Backends::of($this->unitOfWork(), BulkDeletes::class)->deleteWhere(BankCounterpartyMonth::class, ['bankAccount' => $account]);
     }
 
     /**
@@ -34,10 +40,12 @@ class BankCounterpartyMonthRepository extends ServiceEntityRepository
             return [];
         }
 
-        return $this->createQueryBuilder('r')
-            ->andWhere('r.bankAccount IN (:accounts)')->setParameter('accounts', $accounts)
-            ->andWhere('r.month >= :from AND r.month <= :to')->setParameter('from', $from->modify('first day of this month')->setTime(0, 0))->setParameter('to', $to->setTime(0, 0))
-            ->orderBy('r.month', 'ASC')
-            ->getQuery()->getResult();
+        return $this->findBy([
+            'bankAccount' => Key::of(array_values($accounts)),
+            Group::of(Parser::SEPARATOR_AND,
+                Criterion::of('month', $from->modify('first day of this month')->setTime(0, 0), Parser::OPTION_GREATER_EQUAL),
+                Criterion::of('month', $to->setTime(0, 0), Parser::OPTION_LOWER_EQUAL),
+            ),
+        ], ['month' => 'ASC']);
     }
 }

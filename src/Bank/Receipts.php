@@ -5,7 +5,7 @@ namespace Base\Ledger\Bank;
 use Base\Drive\Share\FileShare;
 use Base\Ledger\Entity\BankLine;
 use Base\Ledger\Exception\BankException;
-use Doctrine\ORM\EntityManagerInterface;
+use Base\Contract\UnitOfWork;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 
@@ -23,7 +23,7 @@ class Receipts
     public const TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif', 'image/gif', 'application/pdf'];
 
     public function __construct(
-        private readonly EntityManagerInterface $entityManager,
+        private readonly UnitOfWork $unitOfWork,
         #[Autowire('%ledger.receipts.folder%')] private readonly string $folder = 'Comptabilité/Justificatifs',
         #[Autowire('%ledger.receipts.audience%')] private readonly ?string $audience = 'staff',
         #[Autowire('%ledger.receipts.directory%')] private readonly string $directory = '',
@@ -71,7 +71,7 @@ class Receipts
         }
 
         $line->setReceipt($place, $file->getClientOriginalName() ?: $name, $type);
-        $this->entityManager->flush();
+        $this->unitOfWork->flush();
 
         return $place;
     }
@@ -80,14 +80,14 @@ class Receipts
     public function detach(BankLine $line): void
     {
         $line->setReceipt(null);
-        $this->entityManager->flush();
+        $this->unitOfWork->flush();
     }
 
     /** Marks the line's receipt missing, or not. */
     public function markMissing(BankLine $line, bool $missing = true): void
     {
         $line->setReceiptMissing($missing && !$line->hasReceipt());
-        $this->entityManager->flush();
+        $this->unitOfWork->flush();
     }
 
     /** @return resource|null the receipt's content, null when the line has none or its file is gone */

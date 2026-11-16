@@ -3,8 +3,8 @@
 namespace Base\Ledger\Entity;
 
 use Base\Ledger\Repository\JournalRepository;
-use Doctrine\ORM\Mapping as ORM;
-use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
+use Base\Mapping as ORM;
+use Base\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Validator\Constraints as Assert;
 
 /** A book's journal: BQ (bank), VT (sales: rent notices), AC (purchases), OD (miscellaneous), AN (opening balances). */

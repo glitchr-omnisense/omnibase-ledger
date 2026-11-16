@@ -8,7 +8,7 @@ use Base\Ledger\Bank\Webhooks;
 use Base\Ledger\Enum\ConsentState;
 use Base\Ledger\Exception\LedgerException;
 use Base\Ledger\Reconciliation\Reconciler;
-use Doctrine\ORM\EntityManagerInterface;
+use Base\Contract\UnitOfWork;
 use Omnibank\Exception\InvalidNotificationException;
 use Omnibank\Model\ConsentStatus;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -28,7 +28,7 @@ class WebhookController extends AbstractController
         private readonly Connections $connections,
         private readonly Sync $sync,
         private readonly Reconciler $reconciler,
-        private readonly EntityManagerInterface $entityManager,
+        private readonly UnitOfWork $unitOfWork,
         private readonly ?Webhooks $webhooks = null,
     ) {
     }
@@ -53,7 +53,7 @@ class WebhookController extends AbstractController
 
         if (null !== $notification->state) {
             $connection->setConnectionState($notification->state);
-            $this->entityManager->flush();
+            $this->unitOfWork->flush();
         }
 
         if (ConsentStatus::NONE !== $notification->consent->status) {
@@ -61,7 +61,7 @@ class WebhookController extends AbstractController
             $connection->setExpiresAt($notification->consent->expiresAt ?? $connection->getExpiresAt());
             $omnibank = $this->connections->open($connection);
             $this->connections->store($connection, $omnibank->withConsent($notification->consent));
-            $this->entityManager->flush();
+            $this->unitOfWork->flush();
         }
 
         if (!$connection->needsRenewal()) {

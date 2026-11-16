@@ -69,7 +69,7 @@ class DashboardTest extends InMemoryDashboard
     public function testOnlyAnUnfinishedConnectionIsRemoved(): void
     {
         $removed = [];
-        $em = $this->createStub(\Doctrine\ORM\EntityManagerInterface::class);
+        $em = $this->createStub(\Base\Contract\UnitOfWork::class);
         $em->method('remove')->willReturnCallback(function (object $entity) use (&$removed): void { $removed[] = $entity; });
         $connections = new \Base\Ledger\Bank\Connections($em, new \Base\Ledger\Security\StateCipher('s'), $this->accountRepository(), $this->journalRepository(),
             $this->createStub(\Base\Ledger\Repository\BankAccountRepository::class), $this->createStub(\Base\Ledger\Repository\BankConnectionRepository::class));
