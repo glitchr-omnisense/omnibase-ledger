@@ -50,7 +50,7 @@ class BankLineRepository extends ServiceEntityRepository
         return array_map(static fn (BankLine $line) => [
             'bookedOn' => $line->getBookedOn(),
             'amount' => (int) $line->getAmount(),
-            'category' => $line->getCategory(),
+            'category' => $line->getCategory()?->value,
             'counterpartyName' => $line->getCounterpartyName(),
             'counterpartyIban' => $line->getCounterpartyIban(),
             'label' => (string) $line->getLabel(),
