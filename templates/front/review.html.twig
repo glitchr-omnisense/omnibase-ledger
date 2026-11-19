@@ -3,6 +3,14 @@
 {% block ledger_title %}{{ 'review.title'|trans({}, 'ledger') }}{% endblock %}
 {% block ledger_class %}ledger-front-review{% endblock %}
 
+{#- One category of the picker (below); at the template's root, since Twig 3.28 deprecates a macro inside a block. -#}
+{% macro option(category, frequent) -%}
+<li role="option" data-number="{{ category.number }}" data-vat="{{ category.vat }}" data-search="{{ (category.key ? ('review.category.' ~ category.key)|trans({}, 'ledger') : '') ~ ' ' ~ category.number ~ ' ' ~ category.label }}"{{ frequent ? ' data-frequent' }}>
+    <span>{{ category.key ? ('review.category.' ~ category.key)|trans({}, 'ledger') : category.label }}</span>
+    <small>{{ category.number }}{{ category.key ? ' · ' ~ category.label }}</small>
+</li>
+{%- endmacro %}
+
 {% block ledger_content %}
 {%- set query = {book: book.id, account: filter.account, month: filter.month, q: filter.q}|filter(v => v is not null) -%}
 <div class="ledger-review" data-ledger-review
@@ -90,12 +98,6 @@
                 <input type="search" data-picker-search placeholder="{{ 'review.picker.search'|trans({}, 'ledger') }}" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="ledger-picker-options">
             </label>
             <ul class="ledger-picker-options" id="ledger-picker-options" role="listbox" data-picker-options>
-                {%- macro option(category, frequent) -%}
-                <li role="option" data-number="{{ category.number }}" data-vat="{{ category.vat }}" data-search="{{ (category.key ? ('review.category.' ~ category.key)|trans({}, 'ledger') : '') ~ ' ' ~ category.number ~ ' ' ~ category.label }}"{{ frequent ? ' data-frequent' }}>
-                    <span>{{ category.key ? ('review.category.' ~ category.key)|trans({}, 'ledger') : category.label }}</span>
-                    <small>{{ category.number }}{{ category.key ? ' · ' ~ category.label }}</small>
-                </li>
-                {%- endmacro -%}
                 {%- if categories.frequent is not empty -%}
                 <li class="ledger-picker-group" role="presentation">{{ 'review.picker.frequent'|trans({}, 'ledger') }}</li>
                 {%- for category in categories.frequent %}{{ _self.option(category, true) }}{% endfor -%}
